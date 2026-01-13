@@ -9,41 +9,29 @@ import static edu.wpi.first.units.Units.*;
 import java.util.Map;
 import java.util.function.DoubleSupplier;
 
-import com.ctre.phoenix.motorcontrol.ControlMode;
-import com.ctre.phoenix.sensors.CANCoder;
 import com.ctre.phoenix6.hardware.TalonFX;
-import com.ctre.phoenix6.signals.FeedbackSensorSourceValue;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
-import com.ctre.phoenix6.signals.SensorDirectionValue;
-import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.StatusSignal;
-import com.ctre.phoenix6.configs.CANcoderConfiguration;
 import com.ctre.phoenix6.configs.MotorOutputConfigs;
-import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.configs.TalonFXConfigurator;
 import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.controls.PositionVoltage;
-import com.ctre.phoenix6.hardware.CANcoder;
-import com.revrobotics.AbsoluteEncoder;
 import com.revrobotics.RelativeEncoder;
-import com.revrobotics.spark.SparkBase;
 import com.revrobotics.spark.SparkBase.ControlType;
-import com.revrobotics.spark.SparkBase.PersistMode;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
-import com.revrobotics.spark.config.EncoderConfig;
 import com.revrobotics.spark.config.SparkMaxConfig;
-import com.revrobotics.spark.config.ClosedLoopConfig.FeedbackSensor;
+import com.revrobotics.spark.FeedbackSensor;
+import com.revrobotics.ResetMode;
+import com.revrobotics.PersistMode;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.networktables.GenericEntry;
 import edu.wpi.first.units.measure.*;
 import edu.wpi.first.wpilibj.DigitalInput;
-import edu.wpi.first.wpilibj.DutyCycleEncoder;
 import edu.wpi.first.wpilibj.shuffleboard.ComplexWidget;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
@@ -52,13 +40,9 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.WaitCommand;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.ConditionalCommand;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
-import edu.wpi.first.wpilibj2.command.PrintCommand;
 import edu.wpi.first.wpilibj2.command.SelectCommand;
-import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
 import edu.wpi.first.wpilibj2.command.FunctionalCommand;
-import frc.robot.commands.arm.ArmToPosCmd;
 import frc.robot.commands.arm.ElevatorToPosCmd;
 import frc.robot.commands.arm.WristHomeLimit;
 import frc.robot.commands.arm.WristToPosCmd;
@@ -76,7 +60,6 @@ public class Arm extends SubsystemBase
    private final DigitalInput m_elevatorLimitLow = new DigitalInput(ArmConstants.ELEVATOR_LOW_LIMIT_SWITCH_PORT);
    // WRIST
    private final TalonFX m_wrist = new TalonFX(Constants.ARM_WRIST_CAN_ID);
-   //private final CANcoder m_wristEncoder = new CANcoder(Constants.ARM_ENCODER_CAN_ID); 
    private final PositionVoltage m_wristVoltage = new PositionVoltage(0);
    private final DigitalInput m_wristLimitLow = new DigitalInput(ArmConstants.WRIST_LOW_LIMIT_SWITCH_PORT);
    //private final DutyCycleEncoder m_wristRevEnc = new DutyCycleEncoder(0);
@@ -153,10 +136,9 @@ public class Arm extends SubsystemBase
       //m_elevatorPID.SetD(1.0);
 
       SparkMaxConfig pidConfig = new SparkMaxConfig();
-      pidConfig.closedLoop.pidf(  p,
+      pidConfig.closedLoop.pid(  p,
                                  i,
-                                 d,
-                                 ArmConstants.ELEVATOR_PID_FF);
+                                 d);
       //pidConfig.apply()
    }
 
@@ -236,8 +218,7 @@ public class Arm extends SubsystemBase
       // TODO: some kind of offsets here possible?
 
       // TODO: if you need to apply arbFF do it here, not for elevator i think
-      
-      m_elevatorPID.setReference(m_elevatorSetpoint, ControlType.kPosition);
+      m_elevatorPID.setSetpoint(m_elevatorSetpoint, ControlType.kPosition);
       
    }
 
@@ -552,17 +533,17 @@ public class Arm extends SubsystemBase
       m_elevatorEncoder = m_elevatorMaster.getEncoder();
       SparkMaxConfig masterConfig = new SparkMaxConfig();
       SparkMaxConfig slaveConfig = new SparkMaxConfig();
+   
       
       masterConfig.inverted(true);
+
       // TODO; do we setup PID here? Need to check REV lib
-      masterConfig.closedLoop.pidf(  ArmConstants.ELEVATOR_PID_P,
+      masterConfig.closedLoop.pid(  ArmConstants.ELEVATOR_PID_P,
                                      ArmConstants.ELEVATOR_PID_I,
-                                     ArmConstants.ELEVATOR_PID_D,
-                                     ArmConstants.ELEVATOR_PID_FF)
+                                     ArmConstants.ELEVATOR_PID_D)
                               .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                               .positionWrappingEnabled(false)
                               .outputRange(ArmConstants.ELEVATOR_MAX_OUTPUT_DOWN, ArmConstants.ELEVATOR_MAX_OUTPUT_UP);
-                              //.feedbackSensor(FeedbackSensor.kAlternateOrExternalEncoder);
       masterConfig.encoder.positionConversionFactor(ArmConstants.ELEVATOR_ENC_CONV_FACTOR);
       masterConfig.openLoopRampRate(0.5);
       masterConfig.softLimit.forwardSoftLimit(ArmConstants.ELEVATOR_POS_MAX_HEIGHT);
@@ -570,13 +551,13 @@ public class Arm extends SubsystemBase
 
       masterConfig.softLimit.reverseSoftLimit(ArmConstants.ELEVATOR_POS_DOWN);
       masterConfig.softLimit.reverseSoftLimitEnabled(true);
-
-      m_elevatorMaster.configure(masterConfig, SparkBase.ResetMode.kResetSafeParameters,
+      
+      m_elevatorMaster.configure(masterConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
 
       // Slave is just set to follow
       slaveConfig.follow(Constants.ELEVATOR_MASTER_CAN_ID, true);
-      m_elevatorSlave.configure(slaveConfig,SparkBase.ResetMode.kResetSafeParameters,
+      m_elevatorSlave.configure(slaveConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);  
 
    }
