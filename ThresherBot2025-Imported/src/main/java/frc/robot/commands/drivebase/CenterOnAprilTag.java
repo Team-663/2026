@@ -30,10 +30,12 @@ public class CenterOnAprilTag extends Command {
 
     private final SwerveSubsystem m_swerveSubsystem; // Use SwerveSubsystem
     private final SwerveDrive m_swerveDrive;
+    private final int m_tagId;
 
-    public CenterOnAprilTag (SwerveSubsystem swerveSubsystem) {
+    public CenterOnAprilTag (SwerveSubsystem swerveSubsystem, int tagId) {
         m_swerveSubsystem = swerveSubsystem;
         this.m_swerveDrive = swerveSubsystem.getSwerveDrive();
+        this.m_tagId = tagId;
         addRequirements(m_swerveSubsystem); // Declare subsystem dependency
 
         // Set PID controller setpoints

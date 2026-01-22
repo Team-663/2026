@@ -177,7 +177,8 @@ public class RobotContainer {
 
    private void configureBindings()
    {
-      CenterOnAprilTag centerCommand =  new CenterOnAprilTag(drivebase);
+      // Hard coded tag 1 for now
+      CenterOnAprilTag centerCommand =  new CenterOnAprilTag(drivebase, 1);
 
       SmartDashboard.putData("Align with Tag Cmd", centerCommand);
 
