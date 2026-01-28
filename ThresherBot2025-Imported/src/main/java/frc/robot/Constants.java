@@ -32,6 +32,9 @@ public final class Constants
    public static final int ARM_ENCODER_CAN_ID     = 15;
    public static final int LASER_CAN_A_ID         = 16;
 
+   public static final int SHOOTER_MASTER_CAN_ID  = 30;
+   public static final int SHOOTER_SLAVE_CAN_ID   = 31;
+
    public static class DrivebaseConstants
    {
       public static final double MAX_SPEED = Units.feetToMeters(15.5);

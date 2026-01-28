@@ -54,6 +54,11 @@ public class Arm extends SubsystemBase
    // ELEVATOR
    private final SparkMax m_elevatorMaster = new SparkMax(Constants.ELEVATOR_MASTER_CAN_ID, MotorType.kBrushless);
    private final SparkMax m_elevatorSlave = new SparkMax(Constants.ELEVATOR_SLAVE_CAN_ID, MotorType.kBrushless);
+
+   private final SparkMax m_shooterMaster = new SparkMax(Constants.SHOOTER_MASTER_CAN_ID, MotorType.kBrushless);
+   private final SparkMax m_shooterSlave = new SparkMax(Constants.SHOOTER_SLAVE_CAN_ID, MotorType.kBrushless);
+   private final SparkClosedLoopController m_shooterPID = m_shooterMaster.getClosedLoopController();
+
    private final SparkClosedLoopController m_elevatorPID = m_elevatorMaster.getClosedLoopController();
    private RelativeEncoder m_elevatorEncoder;
 
@@ -107,6 +112,9 @@ public class Arm extends SubsystemBase
    private boolean m_elevatorUsePid = false;
    private int m_armScoreLevel = 0;
 
+   private double m_shooterSetpoint = 0.0;
+   private double m_shooterError = 0.0;
+
    private enum CoralLevel {
       NONE,L1,L2,L3,L4
 
@@ -116,6 +124,7 @@ public class Arm extends SubsystemBase
    {
       ConfigureWrist();
       ConfigureElevator();
+      ConfigureShooter();
    }
    // GUIDES: https://v6.docs.ctr-electronics.com/en/stable/docs/migration/migration-guide/closed-loop-guide.html
    // https://github.com/CrossTheRoadElec/Phoenix6-Examples/blob/main/java/PositionClosedLoop/src/main/java/frc/robot/Robot.java
@@ -220,6 +229,12 @@ public class Arm extends SubsystemBase
       // TODO: if you need to apply arbFF do it here, not for elevator i think
       m_elevatorPID.setSetpoint(m_elevatorSetpoint, ControlType.kPosition);
       
+   }
+
+   public void setShooterPctOutput(double output)
+   {
+      m_shooterSetpoint = output;
+      m_shooterMaster.set(output);
    }
 
    private boolean allowElevatorMotion(double speed)
@@ -527,6 +542,39 @@ public class Arm extends SubsystemBase
       return new InstantCommand(()->setElevatorPosition(setpoint)).withName("ElevSetPos");
    }
 
+   public Command setShooterPctOutputCmd(DoubleSupplier output)
+   {
+      return run( ()-> {
+         setShooterPctOutput(output.getAsDouble());
+      })
+               .withName("ShooterByXbox");
+   }
+
+   public Command setShooterOffCmd()
+   {
+      return run( () -> {
+         setShooterPctOutput(0.0);
+      })
+               .withName("ShooterOff");
+   }
+
+   public void ConfigureShooter()
+   {
+      SparkMaxConfig masterConfig = new SparkMaxConfig();
+      SparkMaxConfig slaveConfig = new SparkMaxConfig();
+   
+      masterConfig.inverted(false);
+
+      m_shooterMaster.configure(masterConfig, ResetMode.kResetSafeParameters,
+            PersistMode.kPersistParameters);
+
+      // Slave is just set to follow
+      slaveConfig.follow(Constants.SHOOTER_MASTER_CAN_ID, true);
+      m_shooterSlave.configure(slaveConfig, ResetMode.kResetSafeParameters,
+            PersistMode.kPersistParameters);
+
+   }
+
    public void ConfigureElevator()
    {
       m_elevatorSetpoint = 0.0;
@@ -653,6 +701,10 @@ public class Arm extends SubsystemBase
 
       SmartDashboard.putNumber("ARM: Wrist StatorCurrent", m_wrist.getStatorCurrent().getValueAsDouble());
       dbArmScoreLevel.setInteger(m_armScoreLevel);
+
+      SmartDashboard.putNumber("Shooter: setpoint", m_shooterSetpoint);
+      SmartDashboard.putNumber("Shooter: error", m_shooterError);
+      SmartDashboard.putNumber("Shooter: RPM", m_shooterMaster.getEncoder().getVelocity());
       // I don't think we need this, the subsystem is sent to the tab now
       
       dbLaserEntry.setDouble(0);

@@ -205,11 +205,12 @@ public class RobotContainer {
       // OPERATOR CONTROLS
       operatorXbox.axisGreaterThan(XboxController.Axis.kLeftY.value, 0.2)
          .or(operatorXbox.axisLessThan(XboxController.Axis.kLeftY.value, -0.2))
-         .whileTrue(m_arm.armByXboxCmd(()->operatorXbox.getLeftY()*-1, ()->operatorXbox.getRightY()*-1.0));
+         .whileTrue(m_arm.setShooterPctOutputCmd(()->operatorXbox.getLeftY()*-1.0))
+         .onFalse(m_arm.setShooterOffCmd());
 
-      operatorXbox.axisGreaterThan(XboxController.Axis.kRightY.value, 0.2)
-      .or(operatorXbox.axisLessThan(XboxController.Axis.kRightY.value, -0.2))
-         .whileTrue(m_arm.armByXboxCmd(()->operatorXbox.getLeftY()*-1, ()->operatorXbox.getRightY()*-1.0));
+      //operatorXbox.axisGreaterThan(XboxController.Axis.kRightY.value, 0.2)
+      //.or(operatorXbox.axisLessThan(XboxController.Axis.kRightY.value, -0.2))
+      //   .whileTrue(m_arm.armByXboxCmd(()->operatorXbox.getLeftY()*-1, ()->operatorXbox.getRightY()*-1.0));
          
       operatorXbox.start().onTrue(Commands.runOnce(m_arm::resetAllArmEncoders));
       operatorXbox.x().onTrue(m_arm.armLoadCoralCmd());
