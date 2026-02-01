@@ -24,6 +24,7 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Constants.OperatorConstants;
 import frc.robot.subsystems.SwerveSubsystem;
+import frc.robot.subsystems.Shooter;
 import swervelib.SwerveInputStream;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -37,6 +38,7 @@ public class RobotContainer
     public final SwerveSubsystem       drivebase  = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(),
                                                                                 "swerve"));
 
+    private final Shooter shooter = new Shooter();
     // Establish a Sendable Chooser that will be able to be sent to the SmartDashboard, allowing selection of desired auto
     private final SendableChooser<Command> autoChooser;
     public final Field2d field = new Field2d();
@@ -178,8 +180,17 @@ public class RobotContainer
             driverXbox.rightBumper().onTrue(Commands.none());
         } else
         {
-            driverXbox.a().onTrue((Commands.runOnce(drivebase::zeroGyro)));
-            driverXbox.start().whileTrue(Commands.none());
+            driverXbox.a()
+                        .onTrue(shooter.shooterSetRPMCommand(Constants.ShooterConstants.SHOOTER_RPM_LOW))
+                        .onFalse(shooter.shooterOffCommand());
+            driverXbox.b()
+                        .onTrue(shooter.shooterSetRPMCommand(Constants.ShooterConstants.SHOOTER_RPM_MEDIUM))
+                        .onFalse(shooter.shooterOffCommand());
+            driverXbox.y()
+                        .onTrue(shooter.shooterSetRPMCommand(Constants.ShooterConstants.SHOOTER_RPM_HIGH))
+                        .onFalse(shooter.shooterOffCommand());
+        
+            driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyro)));
             driverXbox.back().whileTrue(Commands.none());
             driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
             driverXbox.rightBumper().onTrue(Commands.none());

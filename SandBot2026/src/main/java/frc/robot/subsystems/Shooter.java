@@ -6,8 +6,17 @@ package frc.robot.subsystems;
 
 import com.ctre.phoenix.motorcontrol.FeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
+import com.ctre.phoenix6.StatusCode;
+import com.ctre.phoenix6.configs.MotorOutputConfigs;
+import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.Follower;
 import com.ctre.phoenix6.controls.PositionVoltage;
+import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.InvertedValue;
+import com.ctre.phoenix6.signals.MotorAlignmentValue;
+import com.ctre.phoenix6.signals.NeutralModeValue;
+import com.ctre.phoenix6.controls.Follower;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.FeedbackSensor;
 import com.revrobotics.spark.SparkClosedLoopController;
@@ -19,6 +28,11 @@ import com.revrobotics.ResetMode;
 import com.revrobotics.PersistMode;
 
 import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.FunctionalCommand;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants.CANConstants;
@@ -29,8 +43,10 @@ public class Shooter extends SubsystemBase
     private final SparkMax m_shooterKicker = new SparkMax(CANConstants.SHOOTER_KICKER_CAN_ID, MotorType.kBrushless);
     private final SparkMax m_shooterTurret = new SparkMax(CANConstants.SHOOTER_TURRET_CAN_ID, MotorType.kBrushless);
     private final TalonSRX m_shooterHood = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
-    private final SparkMax m_shooterMaster = new SparkMax(CANConstants.SHOOTER_MASTER_CAN_ID, MotorType.kBrushless);
-    private final SparkMax m_shooterSlave = new SparkMax(CANConstants.SHOOTER_SLAVE_CAN_ID, MotorType.kBrushless);
+    //private final SparkMax m_shooterMaster = new SparkMax(CANConstants.SHOOTER_MASTER_CAN_ID, MotorType.kBrushless);
+    //private final SparkMax m_shooterSlave = new SparkMax(CANConstants.SHOOTER_SLAVE_CAN_ID, MotorType.kBrushless);
+    private final TalonFX m_shooterMaster = new TalonFX(CANConstants.SHOOTER_MASTER_CAN_ID);
+    private final TalonFX m_shooterSlave = new TalonFX(CANConstants.SHOOTER_SLAVE_CAN_ID);
     
     //private final SparkClosedLoopController m_turretPID = m_shooterTurret.getClosedLoopController();
 
@@ -55,11 +71,55 @@ public class Shooter extends SubsystemBase
     public void periodic()
     {
         // This method will be called once per scheduler run
+        updateSmartDashboard();
 
     }
 
     private void ShooterInitFlywheel()
     {
+        MotorOutputConfigs mconfig = new MotorOutputConfigs();
+
+        mconfig.withInverted(InvertedValue.Clockwise_Positive);
+        mconfig.withNeutralMode(NeutralModeValue.Coast);
+
+        TalonFXConfiguration fx_cfg = new TalonFXConfiguration();
+        fx_cfg.Feedback.SensorToMechanismRatio = 125.0 / 360.0;
+        fx_cfg.Feedback.RotorToSensorRatio = 1.0;
+
+        fx_cfg.Slot0.kP = ShooterConstants.SHOOTER_PID_P;
+        fx_cfg.Slot0.kI = ShooterConstants.SHOOTER_PID_I;
+        fx_cfg.Slot0.kD = ShooterConstants.SHOOTER_PID_D;
+        fx_cfg.Slot0.kV = ShooterConstants.SHOOTER_PID_FF_KV;
+        fx_cfg.Slot0.kS = ShooterConstants.SHOOTER_PID_FF_KS;
+
+        fx_cfg.CurrentLimits.withStatorCurrentLimit(ShooterConstants.SHOOTER_CURRENT_LIMIT);
+        fx_cfg.CurrentLimits.withStatorCurrentLimitEnable(true);
+
+        fx_cfg.withMotorOutput(mconfig);
+
+        StatusCode status = m_shooterMaster.getConfigurator().apply(fx_cfg);
+
+        if (!status.isOK()) {
+            System.out.println("Shooter Master configuration failed: " + status);
+        }
+
+        TalonFXConfiguration configSlave = new TalonFXConfiguration();
+        configSlave.CurrentLimits.SupplyCurrentLimitEnable = true;
+        configSlave.CurrentLimits.SupplyCurrentLimit = ShooterConstants.SHOOTER_CURRENT_LIMIT;
+
+        // Setup Slave motor configuration
+        m_shooterSlave.setNeutralMode(NeutralModeValue.Coast);
+        m_shooterSlave.setControl(new Follower(m_shooterMaster.getDeviceID(), MotorAlignmentValue.Opposed));
+        status = m_shooterSlave.getConfigurator().apply(configSlave);
+
+        if (!status.isOK()) {
+            System.out.println("Shooter Slave configuration failed: " + status);
+        }
+
+
+
+        /* WHEN SHOOTER WAS NEO... */
+        /*
         SparkMaxConfig masterConfig = new SparkMaxConfig();
         SparkMaxConfig slaveConfig = new SparkMaxConfig();
 
@@ -78,6 +138,7 @@ public class Shooter extends SubsystemBase
 
         m_shooterSlave.configure(slaveConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
+        */
     }
 
     private void ShooterInitTurret()
@@ -94,7 +155,7 @@ public class Shooter extends SubsystemBase
         turretConfig.softLimit.reverseSoftLimit(ShooterConstants.TURRET_SOFT_LIMIT_REVERSE);
         turretConfig.softLimit.reverseSoftLimitEnabled(false);
 
-        m_shooterMaster.configure(turretConfig, ResetMode.kResetSafeParameters,
+        m_shooterTurret.configure(turretConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
     }
 
@@ -120,4 +181,40 @@ public class Shooter extends SubsystemBase
     
     }
 
+    public void shooterSetRPM(double rpm)
+    {
+        m_targetShooterRPM = rpm;
+        m_shooterMaster.setControl(new VelocityVoltage(rpm / 60.0)); // convert RPM to RPS
+    }
+
+    public void shooterStop()
+    {
+        m_targetShooterRPM = 0.0;
+        m_shooterMaster.stopMotor();
+    }
+
+    public boolean isShooterAtRPM()
+    {
+        double currentRPM = m_shooterMaster.getVelocity().getValueAsDouble() * 60.0; // convert RPS to RPM
+        return Math.abs(currentRPM - m_targetShooterRPM) <= ShooterConstants.SHOOTER_ERROR_TOLERANCE_RPM;
+    }
+
+    public Command shooterSetRPMCommand(double rpm)
+    {
+        return Commands.sequence(
+                new InstantCommand(() -> shooterSetRPM(rpm)));
+    }
+
+    public Command shooterOffCommand()
+    {
+        return Commands.sequence(
+                new InstantCommand(() -> shooterStop()));
+    }
+
+    private void updateSmartDashboard()
+    {
+        SmartDashboard.putNumber("Shooter/Setpoint", m_targetShooterRPM);
+        SmartDashboard.putNumber("Shooter/RPM", m_shooterMaster.getVelocity().getValueAsDouble() * 60.0);
+        SmartDashboard.putBoolean("Shooter/AtTarget", isShooterAtRPM());
+    }
 }

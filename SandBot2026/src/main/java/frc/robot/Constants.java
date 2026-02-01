@@ -69,13 +69,20 @@ public class Constants
         public static final double HOOD_SOFT_LIMIT_FORWARD = 5000.0; // TODO: measure this limit from encoder
         public static final double HOOD_SOFT_LIMIT_REVERSE = 0.0; // TODO: measure this limit from encoder
 
-        public static final double SHOOTER_PID_P = 0.0004;
+        public static final double SHOOTER_PID_P = 0.08;
         public static final double SHOOTER_PID_I = 0.0;
         public static final double SHOOTER_PID_D = 0.0;
-        public static final double SHOOTER_PID_FF = 0.000175;
-        public static final double SHOOTER_PID_FF_KS = 0.05;
-        public static final double SHOOTER_PID_FF_KV = (1.0 / 5700.0);
+        // Formlat for kV = (volts * seconds) / meter
+        // Below is for 5500 RPM (91.7 RPS) at 12 V: 91.7 * 0.12 = 11.0 volts (leaves some headroom)
+        public static final double SHOOTER_PID_FF_KV = 0.12; // Some commendations were 0.12 (phoenix6 is velocityVolts)
+        public static final double SHOOTER_PID_FF_KS = 0.25;
         public static final double SHOOTER_ERROR_TOLERANCE_RPM = 25.0;
+        public static final double SHOOTER_CURRENT_LIMIT = 60.0;
+
+        public static final double SHOOTER_RPM_LOW = 2000.0;
+        public static final double SHOOTER_RPM_MEDIUM = 3500.0;
+        public static final double SHOOTER_RPM_HIGH = 5800.0;
+
     }
 
     public static class IntakeConstants
