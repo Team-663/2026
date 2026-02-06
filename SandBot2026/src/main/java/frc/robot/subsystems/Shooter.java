@@ -4,6 +4,9 @@
 
 package frc.robot.subsystems;
 
+import java.util.function.DoubleSupplier;
+
+import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.FeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.ctre.phoenix6.StatusCode;
@@ -23,7 +26,9 @@ import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.config.FeedForwardConfig;
 import com.revrobotics.spark.config.SparkMaxConfig;
+import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
+import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.ResetMode;
 import com.revrobotics.PersistMode;
 
@@ -40,9 +45,10 @@ import frc.robot.Constants.ShooterConstants;;
 
 public class Shooter extends SubsystemBase
 {
-    private final SparkMax m_shooterKicker = new SparkMax(CANConstants.SHOOTER_KICKER_CAN_ID, MotorType.kBrushless);
-    private final SparkMax m_shooterTurret = new SparkMax(CANConstants.SHOOTER_TURRET_CAN_ID, MotorType.kBrushless);
-    private final TalonSRX m_shooterHood = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
+    // Shooter has 5 motors: 1x kicker, 1x turret, 1x hood, 2x flywheel (master/slave)
+    private final SparkMax m_kickerMotor = new SparkMax(CANConstants.SHOOTER_KICKER_CAN_ID, MotorType.kBrushless);
+    private final SparkMax m_turretMotor = new SparkMax(CANConstants.SHOOTER_TURRET_CAN_ID, MotorType.kBrushless);
+    private final TalonSRX m_hoodMotor = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
     //private final SparkMax m_shooterMaster = new SparkMax(CANConstants.SHOOTER_MASTER_CAN_ID, MotorType.kBrushless);
     //private final SparkMax m_shooterSlave = new SparkMax(CANConstants.SHOOTER_SLAVE_CAN_ID, MotorType.kBrushless);
     private final TalonFX m_shooterMaster = new TalonFX(CANConstants.SHOOTER_MASTER_CAN_ID);
@@ -83,7 +89,7 @@ public class Shooter extends SubsystemBase
         mconfig.withNeutralMode(NeutralModeValue.Coast);
 
         TalonFXConfiguration fx_cfg = new TalonFXConfiguration();
-        fx_cfg.Feedback.SensorToMechanismRatio = 125.0 / 360.0;
+        //fx_cfg.Feedback.SensorToMechanismRatio = 125.0 / 360.0;
         fx_cfg.Feedback.RotorToSensorRatio = 1.0;
 
         fx_cfg.Slot0.kP = ShooterConstants.SHOOTER_PID_P;
@@ -144,9 +150,11 @@ public class Shooter extends SubsystemBase
     private void ShooterInitTurret()
     {
         SparkMaxConfig turretConfig = new SparkMaxConfig();
+        turretConfig.inverted(false);
+        turretConfig.idleMode(IdleMode.kBrake);
         turretConfig.closedLoop.pid(ShooterConstants.TURRET_PID_P, ShooterConstants.TURRET_PID_I, ShooterConstants.TURRET_PID_D);
 
-        turretConfig.closedLoop.feedbackSensor(FeedbackSensor.kAlternateOrExternalEncoder);
+        turretConfig.closedLoop.feedbackSensor(FeedbackSensor.kAbsoluteEncoder);
         turretConfig.encoder.positionConversionFactor(ShooterConstants.TURRET_ENCODER_CONVERSION_FACTOR);
         turretConfig.closedLoop.maxOutput(ShooterConstants.TURRET_MAX_OUTPUT);
 
@@ -155,30 +163,35 @@ public class Shooter extends SubsystemBase
         turretConfig.softLimit.reverseSoftLimit(ShooterConstants.TURRET_SOFT_LIMIT_REVERSE);
         turretConfig.softLimit.reverseSoftLimitEnabled(false);
 
-        m_shooterTurret.configure(turretConfig, ResetMode.kResetSafeParameters,
+        m_turretMotor.configure(turretConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
     }
 
     private void ShooterInitHood()
     {
         // Hood motor uses TalonSRX controller
-        m_shooterHood.configFactoryDefault();
-        m_shooterHood.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Relative); // TODO: verify encoder type
-        m_shooterHood.setSensorPhase(true);
-        m_shooterHood.configAllowableClosedloopError(0, ShooterConstants.HOOD_ERROR_TOLERANCE, m_talonTimeoutMs);
+        m_hoodMotor.configFactoryDefault();
+        m_hoodMotor.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Relative); // TODO: verify encoder type
+        m_hoodMotor.setSensorPhase(true);
+        m_hoodMotor.configAllowableClosedloopError(0, ShooterConstants.HOOD_ERROR_TOLERANCE, m_talonTimeoutMs);
 
-        m_shooterHood.configClosedLoopPeakOutput(0, ShooterConstants.HOOD_MAX_OUTPUT_UP, m_talonTimeoutMs);
-        m_shooterHood.config_kP(0, ShooterConstants.HOOD_PID_P);
-        m_shooterHood.config_kI(0, ShooterConstants.HOOD_PID_I);
-        m_shooterHood.config_kD(0, ShooterConstants.HOOD_PID_D);
-        m_shooterHood.config_kF(0, ShooterConstants.HOOD_PID_FF);
+        m_hoodMotor.configClosedLoopPeakOutput(0, ShooterConstants.HOOD_MAX_OUTPUT_UP, m_talonTimeoutMs);
+        m_hoodMotor.config_kP(0, ShooterConstants.HOOD_PID_P);
+        m_hoodMotor.config_kI(0, ShooterConstants.HOOD_PID_I);
+        m_hoodMotor.config_kD(0, ShooterConstants.HOOD_PID_D);
+        m_hoodMotor.config_kF(0, ShooterConstants.HOOD_PID_FF);
 
         //TODO: enable soft limits when we have hood position ranges from the encoder
-        m_shooterHood.configForwardSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_FORWARD, m_talonTimeoutMs);
-        m_shooterHood.configForwardSoftLimitEnable(false);
-        m_shooterHood.configReverseSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_REVERSE, m_talonTimeoutMs);
-        m_shooterHood.configReverseSoftLimitEnable(false);
+        m_hoodMotor.configForwardSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_FORWARD, m_talonTimeoutMs);
+        m_hoodMotor.configForwardSoftLimitEnable(false);
+        m_hoodMotor.configReverseSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_REVERSE, m_talonTimeoutMs);
+        m_hoodMotor.configReverseSoftLimitEnable(false);
     
+    }
+
+    private void setShooterPctOutput(double value)
+    {
+        m_shooterMaster.set(value);
     }
 
     public void shooterSetRPM(double rpm)
@@ -199,16 +212,87 @@ public class Shooter extends SubsystemBase
         return Math.abs(currentRPM - m_targetShooterRPM) <= ShooterConstants.SHOOTER_ERROR_TOLERANCE_RPM;
     }
 
-    public Command shooterSetRPMCommand(double rpm)
+    public Command setShooterPctOutputCmd(DoubleSupplier output)
+    {
+        return run( ()-> {
+            setShooterPctOutput(output.getAsDouble());
+            })
+            .withName("ShooterByXbox");
+    }
+
+    public Command shooterSetRPMCmd(double rpm)
     {
         return Commands.sequence(
                 new InstantCommand(() -> shooterSetRPM(rpm)));
     }
 
-    public Command shooterOffCommand()
+    public Command shooterOffCmd()
+    {
+        return Commands.run(() -> shooterStop(), this).withName("ShooterOff");
+    }
+
+    private void setHoodPosition(double angle)
+    {
+        // TODO: implement hood position control
+        m_targetHoodPosition = angle;
+        //m_shooterHood.set(ControlMode.Position, angle);
+    }
+
+    private void setHoodPctOutput(double output)
+    {
+        m_hoodMotor.set(ControlMode.PercentOutput, output);
+    }
+
+    public Command setHoodPctOutputCmd(DoubleSupplier output)
+    {
+        return run( ()-> {setHoodPctOutput(output.getAsDouble());})
+            .withName("HoodByXbox");
+    }
+
+    public Command hoodOffCmd()
     {
         return Commands.sequence(
-                new InstantCommand(() -> shooterStop()));
+                new InstantCommand(() -> setHoodPctOutput(0.0)));
+    }
+
+    private void setTurretPosition(double angle)
+    {
+        m_targetTurretPosition = angle;
+        //m_turretMotor.getClosedLoopController().setSetpoint(angle, ControlType.kPosition);
+    }
+
+    private void setTurretPctOutput(double output)
+    {
+        m_turretMotor.set(output);
+    }
+
+    public Command setTurretPctOutputCmd(DoubleSupplier output)
+    {
+        return run( ()-> {setTurretPctOutput(output.getAsDouble());})
+            .withName("TurretByXbox");
+    }
+
+    public Command turretOffCmd()
+    {
+        return Commands.sequence(
+                new InstantCommand(() -> setTurretPctOutput(0.0)));
+    }
+
+    private void setKickerPctOutput(double output)
+    {
+        m_kickerMotor.set(output);
+    }
+
+    public Command setKickerPctOutputCmd(DoubleSupplier output)
+    {
+        return run( ()-> {setKickerPctOutput(output.getAsDouble());})
+            .withName("KickerByXbox");
+    }
+
+    public Command kickerOffCmd()
+    {
+        return Commands.sequence(
+                new InstantCommand(() -> setKickerPctOutput(0.0)));
     }
 
     private void updateSmartDashboard()
@@ -216,5 +300,15 @@ public class Shooter extends SubsystemBase
         SmartDashboard.putNumber("Shooter/Setpoint", m_targetShooterRPM);
         SmartDashboard.putNumber("Shooter/RPM", m_shooterMaster.getVelocity().getValueAsDouble() * 60.0);
         SmartDashboard.putBoolean("Shooter/AtTarget", isShooterAtRPM());
+        
+        SmartDashboard.putNumber("Hood/Setpoint", m_targetHoodPosition);
+        SmartDashboard.putNumber("Hood/Position", m_hoodMotor.getSelectedSensorPosition());
+        SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
+
+        SmartDashboard.putNumber("Turret/Setpoint", m_targetTurretPosition);
+        SmartDashboard.putNumber("Turret/Position", m_turretMotor.getEncoder().getPosition());
+        SmartDashboard.putNumber("Turret/Speed", m_turretMotor.getEncoder().getVelocity());
+
+        SmartDashboard.putNumber("Kicker/Speed", m_kickerMotor.getAppliedOutput());
     }
 }

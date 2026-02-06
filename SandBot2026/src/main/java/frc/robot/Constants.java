@@ -9,12 +9,11 @@ import edu.wpi.first.math.util.Units;
 public class Constants 
 {
     public static class CANConstants
-    {
+    {   // PIGEON = 2
         // BackLeftDrive/Angle:    4,  5
         // BackRightDrive/Angle:   6,  7
         // FrontLeftDrive/Angle:   8,  9
         // FrontRightDrive/Angle: 10, 11
-        // Pidgeon: 20
 
         public static final int INTAKE_ARM_CAN_ID      = 12;
         public static final int INTAKE_ROLLER_CAN_ID   = 13;

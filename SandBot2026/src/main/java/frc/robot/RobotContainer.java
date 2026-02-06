@@ -17,6 +17,7 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj.RobotBase;
+import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -33,7 +34,8 @@ public class RobotContainer
 {
 
     // Replace with CommandPS4Controller or CommandJoystick if needed
-    final         CommandXboxController driverXbox = new CommandXboxController(0);
+    final CommandXboxController driverXbox = new CommandXboxController(0);
+    final CommandXboxController operatorXbox = new CommandXboxController(1);
     // The robot's subsystems and commands are defined here...
     public final SwerveSubsystem       drivebase  = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(),
                                                                                 "swerve"));
@@ -135,6 +137,9 @@ public class RobotContainer
         //Command driveSetpointGenKeyboard = drivebase.driveWithSetpointGeneratorFieldRelative(
         //        driveDirectAngleKeyboard);
 
+        shooter.setDefaultCommand(shooter.shooterOffCmd());
+
+
         if (RobotBase.isSimulation())
         {
             drivebase.setDefaultCommand(driveFieldOrientedDirectAngleKeyboard);
@@ -180,20 +185,39 @@ public class RobotContainer
             driverXbox.rightBumper().onTrue(Commands.none());
         } else
         {
-            driverXbox.a()
-                        .onTrue(shooter.shooterSetRPMCommand(Constants.ShooterConstants.SHOOTER_RPM_LOW))
-                        .onFalse(shooter.shooterOffCommand());
-            driverXbox.b()
-                        .onTrue(shooter.shooterSetRPMCommand(Constants.ShooterConstants.SHOOTER_RPM_MEDIUM))
-                        .onFalse(shooter.shooterOffCommand());
-            driverXbox.y()
-                        .onTrue(shooter.shooterSetRPMCommand(Constants.ShooterConstants.SHOOTER_RPM_HIGH))
-                        .onFalse(shooter.shooterOffCommand());
-        
+            
             driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyro)));
             driverXbox.back().whileTrue(Commands.none());
             driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
             driverXbox.rightBumper().onTrue(Commands.none());
+            
+            
+            operatorXbox.a()
+                        .onTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_LOW))
+                        .onFalse(shooter.shooterOffCmd());
+            operatorXbox.b()
+                        .onTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_MEDIUM))
+                        .onFalse(shooter.shooterOffCmd());
+            operatorXbox.y()
+                        .onTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_HIGH))
+                        .onFalse(shooter.shooterOffCmd());
+            
+            // Trigger to control shooter motor percent output
+            operatorXbox.rightTrigger(0.1)
+                .whileTrue(shooter.setShooterPctOutputCmd(()->operatorXbox.getLeftY()*-1.0))
+                .onFalse(shooter.shooterOffCmd());
+            
+            // Left stick X controls turret
+            operatorXbox.axisGreaterThan(XboxController.Axis.kLeftX.value, 0.15)
+                .or(operatorXbox.axisLessThan(XboxController.Axis.kLeftX.value, -0.15))
+                .whileTrue(shooter.setTurretPctOutputCmd(()->operatorXbox.getLeftX()*-1.0))
+                .onFalse(shooter.turretOffCmd());
+            // Right stick Y controls hood
+            operatorXbox.axisGreaterThan(XboxController.Axis.kRightY.value, 0.15)
+                .or(operatorXbox.axisLessThan(XboxController.Axis.kRightY.value, -0.15))
+                .whileTrue(shooter.setHoodPctOutputCmd(()->operatorXbox.getRightY()*-1.0))
+                .onFalse(shooter.hoodOffCmd());
+                
         }
     }
 
