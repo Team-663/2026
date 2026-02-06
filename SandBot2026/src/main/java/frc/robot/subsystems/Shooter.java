@@ -48,9 +48,7 @@ public class Shooter extends SubsystemBase
     // Shooter has 5 motors: 1x kicker, 1x turret, 1x hood, 2x flywheel (master/slave)
     private final SparkMax m_kickerMotor = new SparkMax(CANConstants.SHOOTER_KICKER_CAN_ID, MotorType.kBrushless);
     private final SparkMax m_turretMotor = new SparkMax(CANConstants.SHOOTER_TURRET_CAN_ID, MotorType.kBrushless);
-    private final TalonSRX m_hoodMotor = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
-    //private final SparkMax m_shooterMaster = new SparkMax(CANConstants.SHOOTER_MASTER_CAN_ID, MotorType.kBrushless);
-    //private final SparkMax m_shooterSlave = new SparkMax(CANConstants.SHOOTER_SLAVE_CAN_ID, MotorType.kBrushless);
+    //private final TalonSRX m_hoodMotor = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
     private final TalonFX m_shooterMaster = new TalonFX(CANConstants.SHOOTER_MASTER_CAN_ID);
     private final TalonFX m_shooterSlave = new TalonFX(CANConstants.SHOOTER_SLAVE_CAN_ID);
     
@@ -170,6 +168,7 @@ public class Shooter extends SubsystemBase
     private void ShooterInitHood()
     {
         // Hood motor uses TalonSRX controller
+        /*
         m_hoodMotor.configFactoryDefault();
         m_hoodMotor.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Relative); // TODO: verify encoder type
         m_hoodMotor.setSensorPhase(true);
@@ -186,6 +185,7 @@ public class Shooter extends SubsystemBase
         m_hoodMotor.configForwardSoftLimitEnable(false);
         m_hoodMotor.configReverseSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_REVERSE, m_talonTimeoutMs);
         m_hoodMotor.configReverseSoftLimitEnable(false);
+        */
     
     }
 
@@ -240,7 +240,7 @@ public class Shooter extends SubsystemBase
 
     private void setHoodPctOutput(double output)
     {
-        m_hoodMotor.set(ControlMode.PercentOutput, output);
+        //m_hoodMotor.set(ControlMode.PercentOutput, output);
     }
 
     public Command setHoodPctOutputCmd(DoubleSupplier output)
@@ -302,8 +302,8 @@ public class Shooter extends SubsystemBase
         SmartDashboard.putBoolean("Shooter/AtTarget", isShooterAtRPM());
         
         SmartDashboard.putNumber("Hood/Setpoint", m_targetHoodPosition);
-        SmartDashboard.putNumber("Hood/Position", m_hoodMotor.getSelectedSensorPosition());
-        SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
+        //SmartDashboard.putNumber("Hood/Position", m_hoodMotor.getSelectedSensorPosition());
+        //SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
 
         SmartDashboard.putNumber("Turret/Setpoint", m_targetTurretPosition);
         SmartDashboard.putNumber("Turret/Position", m_turretMotor.getEncoder().getPosition());

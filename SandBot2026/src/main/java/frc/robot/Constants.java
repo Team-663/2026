@@ -9,7 +9,7 @@ import edu.wpi.first.math.util.Units;
 public class Constants 
 {
     public static class CANConstants
-    {   // PIGEON = 2
+    {   // PIGEON = 20
         // BackLeftDrive/Angle:    4,  5
         // BackRightDrive/Angle:   6,  7
         // FrontLeftDrive/Angle:   8,  9
