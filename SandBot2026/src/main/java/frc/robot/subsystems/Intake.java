@@ -100,8 +100,7 @@ public class Intake extends SubsystemBase
 
     public Command armOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setArmPctOutput(0.0)));
+        return Commands.runOnce(() -> setArmPctOutput(0.0), this).withName("ArmOff");
     }
 
     private void setAgitatorPctOutput(double output)
@@ -118,8 +117,7 @@ public class Intake extends SubsystemBase
 
     public Command agitatorOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setAgitatorPctOutput(0.0)));
+        return Commands.runOnce(() -> setAgitatorPctOutput(0.0), this).withName("AgitatorOff");
     }
 
     private void setRollerPctOutput(double output)
@@ -135,8 +133,7 @@ public class Intake extends SubsystemBase
 
     public Command rollerOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setRollerPctOutput(0.0)));
+        return Commands.runOnce(() -> setRollerPctOutput(0.0), this).withName("RollerOff");
     }
 
     public void setIntakeStatus(boolean enabled)
@@ -153,7 +150,14 @@ public class Intake extends SubsystemBase
 
     public Command intakeOffCommand()
     {
-        return Commands.run(() -> setIntakeStatus(false), this).withName("IntakeOff");
+       // kill switch for the entire intake subsystem and update the SmartDashboard.
+       //sets the power of all three motors to 0.0
+       return Commands.runOnce(() -> {
+            setIntakeStatus(false);
+            setArmPctOutput(0.0);
+            setAgitatorPctOutput(0.0);
+            setRollerPctOutput(0.0);
+        }, this).withName("IntakeOff");
     }
 
 
