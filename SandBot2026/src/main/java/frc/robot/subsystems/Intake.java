@@ -26,8 +26,9 @@ import frc.robot.Constants.ShooterConstants;
 
 public class Intake extends SubsystemBase
 {
-    // Intake has 2x SparkMax motors: 1 for arm, 1 for roller
+    // Intake has 3x SparkMax motors: 1 for arm, 1 for agitator, 1 for roller
     private final SparkMax m_armMotor = new SparkMax(CANConstants.INTAKE_ARM_CAN_ID, MotorType.kBrushless);
+    private final SparkMax m_agitatorMotor = new SparkMax(CANConstants.INTAKE_AGITATOR_CAN_ID, MotorType.kBrushed);
     private final SparkMax m_rollerMotor = new SparkMax(CANConstants.INTAKE_ROLLER_CAN_ID, MotorType.kBrushless);
     
     private double m_targetArmPosition = 0.0;
@@ -57,6 +58,12 @@ public class Intake extends SubsystemBase
         armConfig.softLimit.reverseSoftLimitEnabled(false);
         
         m_armMotor.configure(armConfig, ResetMode.kResetSafeParameters,
+            PersistMode.kPersistParameters);
+
+        SparkMaxConfig agitatorConfig = new SparkMaxConfig();
+        agitatorConfig.inverted(false);
+        agitatorConfig.idleMode(IdleMode.kBrake);
+        m_agitatorMotor.configure(agitatorConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
 
         SparkMaxConfig rollerConfig = new SparkMaxConfig();
@@ -97,6 +104,24 @@ public class Intake extends SubsystemBase
                 new InstantCommand(() -> setArmPctOutput(0.0)));
     }
 
+    private void setAgitatorPctOutput(double output)
+    {
+        SmartDashboard.putNumber("Intake/AgitatorOutput", output);
+        m_agitatorMotor.set(output);
+    }
+
+    public Command setAgitatorPctOutputCmd(DoubleSupplier output)
+    {
+        return run( ()-> {setAgitatorPctOutput(output.getAsDouble());})
+            .withName("AgitatorByXbox");
+    }
+
+    public Command agitatorOffCmd()
+    {
+        return Commands.sequence(
+                new InstantCommand(() -> setAgitatorPctOutput(0.0)));
+    }
+
     private void setRollerPctOutput(double output)
     {
         m_rollerMotor.set(output);
@@ -114,6 +139,23 @@ public class Intake extends SubsystemBase
                 new InstantCommand(() -> setRollerPctOutput(0.0)));
     }
 
+    public void setIntakeStatus(boolean enabled)
+    {
+        if (enabled)
+        {
+            SmartDashboard.putString("Intake/Status", "On");
+        }
+        else
+        {
+            SmartDashboard.putString("Intake/Status", "Off");
+        }
+    }
+
+    public Command intakeOffCommand()
+    {
+        return Commands.run(() -> setIntakeStatus(false), this).withName("IntakeOff");
+    }
+
 
 
     private void updateSmartDashboard()
@@ -122,5 +164,6 @@ public class Intake extends SubsystemBase
         SmartDashboard.putNumber("Intake/ArmPosition", m_armMotor.getEncoder().getPosition());
 
         SmartDashboard.putNumber("Intake/RollerSpeed", m_rollerMotor.getAppliedOutput());
+        SmartDashboard.putNumber("Intake/AgitatorSpeed", m_agitatorMotor.getAppliedOutput());
     }
 }

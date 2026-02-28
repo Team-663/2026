@@ -48,7 +48,7 @@ public class Shooter extends SubsystemBase
     // Shooter has 5 motors: 1x kicker, 1x turret, 1x hood, 2x flywheel (master/slave)
     private final SparkMax m_kickerMotor = new SparkMax(CANConstants.SHOOTER_KICKER_CAN_ID, MotorType.kBrushless);
     private final SparkMax m_turretMotor = new SparkMax(CANConstants.SHOOTER_TURRET_CAN_ID, MotorType.kBrushless);
-    //private final TalonSRX m_hoodMotor = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
+    private final TalonSRX m_hoodMotor = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
     private final TalonFX m_shooterMaster = new TalonFX(CANConstants.SHOOTER_MASTER_CAN_ID);
     private final TalonFX m_shooterSlave = new TalonFX(CANConstants.SHOOTER_SLAVE_CAN_ID);
     
@@ -68,6 +68,7 @@ public class Shooter extends SubsystemBase
     {
         ShooterInitHood();
         ShooterInitTurret();
+        ShooterInitKicker();
         ShooterInitFlywheel();
     }
 
@@ -83,7 +84,7 @@ public class Shooter extends SubsystemBase
     {
         MotorOutputConfigs mconfig = new MotorOutputConfigs();
 
-        mconfig.withInverted(InvertedValue.Clockwise_Positive);
+        mconfig.withInverted(InvertedValue.CounterClockwise_Positive);
         mconfig.withNeutralMode(NeutralModeValue.Coast);
 
         TalonFXConfiguration fx_cfg = new TalonFXConfiguration();
@@ -119,30 +120,6 @@ public class Shooter extends SubsystemBase
         if (!status.isOK()) {
             System.out.println("Shooter Slave configuration failed: " + status);
         }
-
-
-
-        /* WHEN SHOOTER WAS NEO... */
-        /*
-        SparkMaxConfig masterConfig = new SparkMaxConfig();
-        SparkMaxConfig slaveConfig = new SparkMaxConfig();
-
-        FeedForwardConfig ffcfg = new FeedForwardConfig();
-        ffcfg.kS(ShooterConstants.SHOOTER_PID_FF_KS);
-        ffcfg.kV(ShooterConstants.SHOOTER_PID_FF_KV);
-
-        masterConfig.closedLoop.pid(ShooterConstants.SHOOTER_PID_P, ShooterConstants.SHOOTER_PID_I, ShooterConstants.SHOOTER_PID_D);
-        masterConfig.closedLoop.feedForward.apply(ffcfg);
-
-        m_shooterMaster.configure(masterConfig, ResetMode.kResetSafeParameters,
-            PersistMode.kPersistParameters);
-        
-        slaveConfig.follow(m_shooterMaster);
-        slaveConfig.inverted(true);
-
-        m_shooterSlave.configure(slaveConfig, ResetMode.kResetSafeParameters,
-            PersistMode.kPersistParameters);
-        */
     }
 
     private void ShooterInitTurret()
@@ -165,10 +142,19 @@ public class Shooter extends SubsystemBase
             PersistMode.kPersistParameters);
     }
 
+    private void ShooterInitKicker()
+    {
+        SparkMaxConfig kickerConfig = new SparkMaxConfig();
+        kickerConfig.inverted(false);
+        kickerConfig.idleMode(IdleMode.kBrake);
+        m_kickerMotor.configure(kickerConfig, ResetMode.kResetSafeParameters,
+            PersistMode.kPersistParameters);
+    }
+
     private void ShooterInitHood()
     {
         // Hood motor uses TalonSRX controller
-        /*
+        
         m_hoodMotor.configFactoryDefault();
         m_hoodMotor.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Relative); // TODO: verify encoder type
         m_hoodMotor.setSensorPhase(true);
@@ -185,7 +171,7 @@ public class Shooter extends SubsystemBase
         m_hoodMotor.configForwardSoftLimitEnable(false);
         m_hoodMotor.configReverseSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_REVERSE, m_talonTimeoutMs);
         m_hoodMotor.configReverseSoftLimitEnable(false);
-        */
+        
     
     }
 
@@ -222,8 +208,10 @@ public class Shooter extends SubsystemBase
 
     public Command shooterSetRPMCmd(double rpm)
     {
-        return Commands.sequence(
-                new InstantCommand(() -> shooterSetRPM(rpm)));
+        //return Commands.sequence(
+        //        new InstantCommand(() -> shooterSetRPM(rpm)));
+        return Commands.runOnce(() -> shooterSetRPM(rpm), this)
+            .withName("ShooterSetRPM_" + rpm);
     }
 
     public Command shooterOffCmd()
@@ -240,7 +228,7 @@ public class Shooter extends SubsystemBase
 
     private void setHoodPctOutput(double output)
     {
-        //m_hoodMotor.set(ControlMode.PercentOutput, output);
+        m_hoodMotor.set(ControlMode.PercentOutput, output*ShooterConstants.HOOD_MANUAL_SPEED_SCALAR);
     }
 
     public Command setHoodPctOutputCmd(DoubleSupplier output)
@@ -300,10 +288,18 @@ public class Shooter extends SubsystemBase
         SmartDashboard.putNumber("Shooter/Setpoint", m_targetShooterRPM);
         SmartDashboard.putNumber("Shooter/RPM", m_shooterMaster.getVelocity().getValueAsDouble() * 60.0);
         SmartDashboard.putBoolean("Shooter/AtTarget", isShooterAtRPM());
+        SmartDashboard.putNumber("Shooter/Voltage", m_shooterMaster.getMotorVoltage().getValueAsDouble());
+        
+        SmartDashboard.putNumber("Shooter/Error_RPM", m_targetShooterRPM - (m_shooterMaster.getVelocity().getValueAsDouble() * 60.0));
+        SmartDashboard.putNumber("Shooter/Current_Amps", m_shooterMaster.getStatorCurrent().getValueAsDouble());
+        SmartDashboard.putNumber("Shooter/Supply_Amps", m_shooterMaster.getSupplyCurrent().getValueAsDouble());
+        SmartDashboard.putNumber("Shooter/ClosedLoopOutput", m_shooterMaster.getClosedLoopOutput().getValueAsDouble());
+        SmartDashboard.putNumber("Shooter/ClosedLoopRef", m_shooterMaster.getClosedLoopReference().getValueAsDouble());
+        
         
         SmartDashboard.putNumber("Hood/Setpoint", m_targetHoodPosition);
-        //SmartDashboard.putNumber("Hood/Position", m_hoodMotor.getSelectedSensorPosition());
-        //SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
+        SmartDashboard.putNumber("Hood/Position", m_hoodMotor.getSelectedSensorPosition());
+        SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
 
         SmartDashboard.putNumber("Turret/Setpoint", m_targetTurretPosition);
         SmartDashboard.putNumber("Turret/Position", m_turretMotor.getEncoder().getPosition());

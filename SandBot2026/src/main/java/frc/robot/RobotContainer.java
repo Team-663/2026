@@ -26,6 +26,7 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Constants.OperatorConstants;
 import frc.robot.subsystems.SwerveSubsystem;
 import frc.robot.subsystems.Shooter;
+import frc.robot.subsystems.Intake;
 import swervelib.SwerveInputStream;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -41,6 +42,7 @@ public class RobotContainer
                                                                                 "swerve"));
 
     private final Shooter shooter = new Shooter();
+    private final Intake intake = new Intake();
     // Establish a Sendable Chooser that will be able to be sent to the SmartDashboard, allowing selection of desired auto
     private final SendableChooser<Command> autoChooser;
     public final Field2d field = new Field2d();
@@ -50,9 +52,10 @@ public class RobotContainer
      * by angular velocity.
      */
     SwerveInputStream driveAngularVelocity = SwerveInputStream.of(drivebase.getSwerveDrive(),
-            () -> driverXbox.getLeftY() * -1,
-            () -> driverXbox.getLeftX() * -1)
+            () -> driverXbox.getLeftY(),
+            () -> driverXbox.getLeftX())
             .withControllerRotationAxis(driverXbox::getRightX)
+            .scaleRotation(-1)
             .deadband(OperatorConstants.DEADBAND)
             .scaleTranslation(0.8)
             .allianceRelativeControl(true);
@@ -137,19 +140,22 @@ public class RobotContainer
         //Command driveSetpointGenKeyboard = drivebase.driveWithSetpointGeneratorFieldRelative(
         //        driveDirectAngleKeyboard);
 
-        shooter.setDefaultCommand(shooter.shooterOffCmd());
+        //shooter.setDefaultCommand(shooter.shooterOffCmd());
+        //intake.setDefaultCommand(intake.intakeOffCommand());
 
 
-        if (RobotBase.isSimulation())
-        {
-            drivebase.setDefaultCommand(driveFieldOrientedDirectAngleKeyboard);
-        } else
-        {
-            drivebase.setDefaultCommand(driveRobotOrientedAngularVelocity);
-        }
+        //if (RobotBase.isSimulation())
+        //{
+        //    drivebase.setDefaultCommand(driveFieldOrientedDirectAngleKeyboard);
+        //} else
+        //{
+            //drivebase.setDefaultCommand(driveRobotOrientedAngularVelocity);
+            drivebase.setDefaultCommand(driveFieldOrientedAnglularVelocity);
+        //}
 
         if (Robot.isSimulation())
         {
+                /*
             Pose2d target = new Pose2d(new Translation2d(1, 4),
                     Rotation2d.fromDegrees(90));
             // drivebase.getSwerveDrive().field.getObject("targetPose").setPose(target);
@@ -172,17 +178,18 @@ public class RobotContainer
             // drivebase.driveToPose(
             // new Pose2d(new Translation2d(4, 4), Rotation2d.fromDegrees(0)))
             // );
+            */
 
         }
         if (DriverStation.isTest())
         {
-            drivebase.setDefaultCommand(driveFieldOrientedAnglularVelocity); // Overrides drive command above!
+            //drivebase.setDefaultCommand(driveFieldOrientedAnglularVelocity); // Overrides drive command above!
 
-            driverXbox.x().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
-            driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyro)));
-            driverXbox.back().whileTrue(drivebase.centerModulesCommand());
-            driverXbox.leftBumper().onTrue(Commands.none());
-            driverXbox.rightBumper().onTrue(Commands.none());
+            //driverXbox.x().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
+            //driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyro)));
+            ///driverXbox.back().whileTrue(drivebase.centerModulesCommand());
+            //driverXbox.leftBumper().onTrue(Commands.none());
+            //driverXbox.rightBumper().onTrue(Commands.none());
         } else
         {
             
@@ -193,24 +200,39 @@ public class RobotContainer
             
             
             operatorXbox.a()
-                        .onTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_LOW))
+                        .whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_LOW))
                         .onFalse(shooter.shooterOffCmd());
             operatorXbox.b()
-                        .onTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_MEDIUM))
+                        .whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_MEDIUM))
                         .onFalse(shooter.shooterOffCmd());
             operatorXbox.y()
-                        .onTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_HIGH))
+                        .whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_HIGH))
                         .onFalse(shooter.shooterOffCmd());
             
             // Trigger to control shooter motor percent output
             operatorXbox.rightTrigger(0.1)
-                .whileTrue(shooter.setShooterPctOutputCmd(()->operatorXbox.getLeftY()*-1.0))
-                .onFalse(shooter.shooterOffCmd());
+                .whileTrue(shooter.setShooterPctOutputCmd(()->operatorXbox.getRightTriggerAxis()*-1.0))
+                .onFalse(shooter.shooterOffCmd());              
+
+            // Left bumper will run kicker IN, right bumper will run it OUT
+            operatorXbox.leftBumper()
+                .whileTrue(shooter.setKickerPctOutputCmd(()-> -1.0))
+                .onFalse(shooter.kickerOffCmd());
+
+           operatorXbox.rightBumper()
+                .whileTrue(shooter.setKickerPctOutputCmd(()-> 1.0))
+                .onFalse(shooter.kickerOffCmd());
+
+            // Left stick Y controls the agitator
+            operatorXbox.axisGreaterThan(XboxController.Axis.kLeftY.value, 0.15)
+                .or(operatorXbox.axisLessThan(XboxController.Axis.kLeftY.value, -0.15))
+                .whileTrue(intake.setAgitatorPctOutputCmd(()->operatorXbox.getLeftY()*-1.0))
+                .onFalse(intake.agitatorOffCmd());
             
-            // Left stick X controls turret
-            operatorXbox.axisGreaterThan(XboxController.Axis.kLeftX.value, 0.15)
-                .or(operatorXbox.axisLessThan(XboxController.Axis.kLeftX.value, -0.15))
-                .whileTrue(shooter.setTurretPctOutputCmd(()->operatorXbox.getLeftX()*-1.0))
+            // Right stick X controls turret
+            operatorXbox.axisGreaterThan(XboxController.Axis.kRightX.value, 0.15)
+                .or(operatorXbox.axisLessThan(XboxController.Axis.kRightX.value, -0.15))
+                .whileTrue(shooter.setTurretPctOutputCmd(()->operatorXbox.getRightX()*-1.0))
                 .onFalse(shooter.turretOffCmd());
             // Right stick Y controls hood
             operatorXbox.axisGreaterThan(XboxController.Axis.kRightY.value, 0.15)

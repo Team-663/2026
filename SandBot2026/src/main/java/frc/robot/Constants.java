@@ -13,16 +13,19 @@ public class Constants
         // BackLeftDrive/Angle:    4,  5
         // BackRightDrive/Angle:   6,  7
         // FrontLeftDrive/Angle:   8,  9
-        // FrontRightDrive/Angle: 10, 11
+        // FrontRightDrive/Angle: 10, 11 
 
-        public static final int INTAKE_ARM_CAN_ID      = 12;
-        public static final int INTAKE_ROLLER_CAN_ID   = 13;
+        public static final int INTAKE_ARM_CAN_ID       = 12;
+        public static final int INTAKE_ROLLER_CAN_ID    = 13;
+        public static final int INTAKE_AGITATOR_CAN_ID  = 14;
 
-        public static final int SHOOTER_KICKER_CAN_ID  = 21;
-        public static final int SHOOTER_TURRET_CAN_ID  = 22;
-        public static final int SHOOTER_HOOD_CAN_ID    = 23;
-        public static final int SHOOTER_MASTER_CAN_ID  = 24; // from turret perspective, LEFT motor if mounted outside
-        public static final int SHOOTER_SLAVE_CAN_ID   = 25;
+        public static final int SHOOTER_KICKER_CAN_ID   = 21;
+        public static final int SHOOTER_TURRET_CAN_ID   = 22;
+        public static final int SHOOTER_HOOD_CAN_ID     = 23;
+        public static final int SHOOTER_MASTER_CAN_ID   = 24; // from turret perspective, LEFT motor if mounted outside
+        public static final int SHOOTER_SLAVE_CAN_ID    = 25;
+
+        public static final int CLIMBER_1_CAN_ID        = 30;
     }
 
     public static class DrivebaseConstants
@@ -61,26 +64,27 @@ public class Constants
         public static final double HOOD_PID_FF = 0.0;
         public static final double HOOD_ERROR_TOLERANCE = 1.0; //
         
-        public static final double HOOD_MAX_OUTPUT_UP = 0.75;
-        public static final double HOOD_MAX_OUTPUT_DOWN = -0.50;
+        public static final double HOOD_MAX_OUTPUT_UP = 0.20;
+        public static final double HOOD_MAX_OUTPUT_DOWN = -0.25;
+        public static final double HOOD_MANUAL_SPEED_SCALAR = 0.25;
         public static final double HOOD_MAX_OUTPUT_XBOX = 1.0;
 
         public static final double HOOD_SOFT_LIMIT_FORWARD = 5000.0; // TODO: measure this limit from encoder
         public static final double HOOD_SOFT_LIMIT_REVERSE = 0.0; // TODO: measure this limit from encoder
 
-        public static final double SHOOTER_PID_P = 0.08;
+        public static final double SHOOTER_PID_P = 0.003;
         public static final double SHOOTER_PID_I = 0.0;
         public static final double SHOOTER_PID_D = 0.0;
         // Formlat for kV = (volts * seconds) / meter
         // Below is for 5500 RPM (91.7 RPS) at 12 V: 91.7 * 0.12 = 11.0 volts (leaves some headroom)
-        public static final double SHOOTER_PID_FF_KV = 0.12; // Some commendations were 0.12 (phoenix6 is velocityVolts)
+        public static final double SHOOTER_PID_FF_KV = 0.118; // Some commendations were 0.12 (phoenix6 is velocityVolts)
         public static final double SHOOTER_PID_FF_KS = 0.25;
         public static final double SHOOTER_ERROR_TOLERANCE_RPM = 25.0;
-        public static final double SHOOTER_CURRENT_LIMIT = 60.0;
+        public static final double SHOOTER_CURRENT_LIMIT = 100.0;
 
         public static final double SHOOTER_RPM_LOW = 2000.0;
         public static final double SHOOTER_RPM_MEDIUM = 3500.0;
-        public static final double SHOOTER_RPM_HIGH = 5800.0;
+        public static final double SHOOTER_RPM_HIGH = 5000.0;
 
     }
 
