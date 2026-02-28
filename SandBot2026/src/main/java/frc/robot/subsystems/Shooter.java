@@ -97,8 +97,17 @@ public class Shooter extends SubsystemBase
         fx_cfg.Slot0.kV = ShooterConstants.SHOOTER_PID_FF_KV;
         fx_cfg.Slot0.kS = ShooterConstants.SHOOTER_PID_FF_KS;
 
+         //Apply the exact same Current LImits configuration to both fx_cfg and configSlave. Generally 
+        //a Stator limit of 60A-80A and a Supply limit of 40A is safe bet for FRC shooters.
+        // Stator current limits heat and torque, while Supply current limits the draw from the battery.
+        // If these are physically pushing the same ball, they should have identical current limit configurations
+        // to ensure they behave symmetrically.  The Stator current limit will prevent the motors from overheating
+        // or snapping a belt and the Supply current limit will prevent the motors from pulling too much power from the
+        // battery and causing brownouts.
         fx_cfg.CurrentLimits.withStatorCurrentLimit(ShooterConstants.SHOOTER_CURRENT_LIMIT);
         fx_cfg.CurrentLimits.withStatorCurrentLimitEnable(true);
+        fx_cfg.CurrentLimits.withSupplyCurrentLimit(40.0);       
+        fx_cfg.CurrentLimits.withSupplyCurrentLimitEnable(true);
 
         fx_cfg.withMotorOutput(mconfig);
 
@@ -109,8 +118,12 @@ public class Shooter extends SubsystemBase
         }
 
         TalonFXConfiguration configSlave = new TalonFXConfiguration();
-        configSlave.CurrentLimits.SupplyCurrentLimitEnable = true;
-        configSlave.CurrentLimits.SupplyCurrentLimit = ShooterConstants.SHOOTER_CURRENT_LIMIT;
+        //replicate setting for slave as for the master above
+        configSlave.CurrentLimits.withStatorCurrentLimit(ShooterConstants.SHOOTER_CURRENT_LIMIT);
+        configSlave.CurrentLimits.withStatorCurrentLimitEnable(true);
+        configSlave.CurrentLimits.withSupplyCurrentLimit(40.0);       
+        configSlave.CurrentLimits.withSupplyCurrentLimitEnable(true);
+        
 
         // Setup Slave motor configuration
         m_shooterSlave.setNeutralMode(NeutralModeValue.Coast);
@@ -239,8 +252,7 @@ public class Shooter extends SubsystemBase
 
     public Command hoodOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setHoodPctOutput(0.0)));
+        return Commands.runOnce(() -> setHoodPctOutput(0.0), this).withName("HoodOff");
     }
 
     private void setTurretPosition(double angle)
@@ -262,8 +274,7 @@ public class Shooter extends SubsystemBase
 
     public Command turretOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setTurretPctOutput(0.0)));
+        return Commands.runOnce(() -> setTurretPctOutput(0.0), this).withName("TurretOff");
     }
 
     private void setKickerPctOutput(double output)
@@ -279,8 +290,7 @@ public class Shooter extends SubsystemBase
 
     public Command kickerOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setKickerPctOutput(0.0)));
+        return Commands.runOnce(() -> setKickerPctOutput(0.0), this).withName("KickerOff");
     }
 
     private void updateSmartDashboard()
