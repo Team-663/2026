@@ -27,6 +27,8 @@ import frc.robot.Constants.OperatorConstants;
 import frc.robot.subsystems.SwerveSubsystem;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Intake;
+import frc.robot.commands.ShootBalls;
+import frc.robot.commands.SpinShooter;
 import swervelib.SwerveInputStream;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -193,53 +195,96 @@ public class RobotContainer
         } else
         {
             
-            driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyro)));
+            driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyroWithAlliance)));
             driverXbox.back().whileTrue(Commands.none());
             driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
             driverXbox.rightBumper().onTrue(Commands.none());
+
+            // Driver tests arm speed manually for now with triggers
+            driverXbox.leftTrigger(0.1)
+            .whileTrue(intake.setArmPctOutputCmd(()->driverXbox.getLeftTriggerAxis()*0.5))
+            .onFalse(intake.armOffCmd());
+
+            driverXbox.rightTrigger(0.1)
+            .whileTrue(intake.setArmPctOutputCmd(()->driverXbox.getRightTriggerAxis()*-0.5))
+            .onFalse(intake.armOffCmd());
+
+            // Driver bumpers will set the arm to "1" for Right bumper and "0 " for left bumper
+            driverXbox.leftBumper()
+            .onTrue(intake.setArmPositionCmd(0.0));
+
+            driverXbox.rightBumper()
+            .onTrue(intake.setArmPositionCmd(1.0));
+
             
-            
+            // A button is for short shots
             operatorXbox.a()
-                        .whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_LOW))
+                        //.whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_LOW))
+                        .whileTrue(new SpinShooter(shooter, Constants.ShooterConstants.SHOOTER_RPM_LOW, Constants.ShooterConstants.HOOD_ANGLE_SHORT_SHOT))
                         .onFalse(shooter.shooterOffCmd());
             operatorXbox.b()
-                        .whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_MEDIUM))
+                        .whileTrue(new SpinShooter(shooter, Constants.ShooterConstants.SHOOTER_RPM_MEDIUM, Constants.ShooterConstants.HOOD_ANGLE_MEDIUM_SHOT))
                         .onFalse(shooter.shooterOffCmd());
             operatorXbox.y()
-                        .whileTrue(shooter.shooterSetRPMCmd(Constants.ShooterConstants.SHOOTER_RPM_HIGH))
+                        .whileTrue(new SpinShooter(shooter, Constants.ShooterConstants.SHOOTER_RPM_HIGH, Constants.ShooterConstants.HOOD_ANGLE_LONG_SHOT))
                         .onFalse(shooter.shooterOffCmd());
+
+            //X Button undefined for now
             
-            // Trigger to control shooter motor percent output
+            
+            // Right trigger/bumpers are for the KICKER/AGITATOR
+            // Trigger to control shooting
             operatorXbox.rightTrigger(0.1)
-                .whileTrue(shooter.setShooterPctOutputCmd(()->operatorXbox.getRightTriggerAxis()*-1.0))
-                .onFalse(shooter.shooterOffCmd());              
+                .whileTrue(new ShootBalls(shooter))
+                .onFalse(Commands.runOnce(() -> {
+                    shooter.setKickerPctOutput(0.0);
+                    shooter.setAgitatorPctOutput(0.0);
+                }, shooter));
 
-            // Left bumper will run kicker IN, right bumper will run it OUT
-            operatorXbox.leftBumper()
-                .whileTrue(shooter.setKickerPctOutputCmd(()-> -1.0))
-                .onFalse(shooter.kickerOffCmd());
-
+            // Right bumper will drive both kicker and agitator backwards in case something is stuck    
            operatorXbox.rightBumper()
-                .whileTrue(shooter.setKickerPctOutputCmd(()-> 1.0))
-                .onFalse(shooter.kickerOffCmd());
+                .whileTrue(Commands.run(() -> {
+                    shooter.setKickerPctOutput(-Constants.ShooterConstants.KICKER_FEED_SPEED);
+                    shooter.setAgitatorPctOutput(-Constants.ShooterConstants.AGITATOR_FEED_SPEED);
+                }, shooter))
+                .onFalse(Commands.runOnce(() -> {
+                    shooter.setKickerPctOutput(0.0);
+                    shooter.setAgitatorPctOutput(0.0);
+                }, shooter));
+                
+            // Left trigger is for INTAKE ROLLERS 
+            operatorXbox.leftTrigger(0.1)
+                .whileTrue(intake.setRollerPctOutputCmd(()->operatorXbox.getLeftTriggerAxis()))
+                .onFalse(intake.rollerOffCmd());
 
-            // Left stick Y controls the agitator
-            operatorXbox.axisGreaterThan(XboxController.Axis.kLeftY.value, 0.15)
-                .or(operatorXbox.axisLessThan(XboxController.Axis.kLeftY.value, -0.15))
-                .whileTrue(intake.setAgitatorPctOutputCmd(()->operatorXbox.getLeftY()*-1.0))
-                .onFalse(intake.agitatorOffCmd());
-            
+            // Left bumper will reverse the intake rollers in case of a jam
+            operatorXbox.leftBumper()
+                .whileTrue(intake.setRollerPctOutputCmd(()-> -Constants.IntakeConstants.INTAKE_ROLLER_OUT_SPEED))
+                .onFalse(intake.rollerOffCmd());
+
             // Right stick X controls turret
             operatorXbox.axisGreaterThan(XboxController.Axis.kRightX.value, 0.15)
                 .or(operatorXbox.axisLessThan(XboxController.Axis.kRightX.value, -0.15))
                 .whileTrue(shooter.setTurretPctOutputCmd(()->operatorXbox.getRightX()*-1.0))
                 .onFalse(shooter.turretOffCmd());
-            // Right stick Y controls hood
-            operatorXbox.axisGreaterThan(XboxController.Axis.kRightY.value, 0.15)
-                .or(operatorXbox.axisLessThan(XboxController.Axis.kRightY.value, -0.15))
-                .whileTrue(shooter.setHoodPctOutputCmd(()->operatorXbox.getRightY()*-1.0))
+
+            // Left stick Y controls hood
+            operatorXbox.axisGreaterThan(XboxController.Axis.kLeftY.value, 0.15)
+                .or(operatorXbox.axisLessThan(XboxController.Axis.kLeftY.value, -0.15))
+                .whileTrue(shooter.setHoodPctOutputCmd(()->operatorXbox.getLeftY()*-1.0))
                 .onFalse(shooter.hoodOffCmd());
-                
+
+            // Operator D-pad will set the hood to specific angles for now (can be changed to buttons later if preferred)
+            operatorXbox.povUp()
+                .whileTrue(shooter.setHoodAngleCmd(Constants.ShooterConstants.HOOD_ANGLE_LONG_SHOT));
+            operatorXbox.povRight()
+                .whileTrue(shooter.setHoodAngleCmd(Constants.ShooterConstants.HOOD_ANGLE_MEDIUM_SHOT));
+            operatorXbox.povDown()
+                .whileTrue(shooter.setHoodAngleCmd(2.0));
+
+            // Start button resets the hood encoder to 0 for debugging
+            operatorXbox.start()
+                .onTrue(Commands.runOnce(() -> shooter.resetHoodEncoder(), shooter));
         }
     }
 

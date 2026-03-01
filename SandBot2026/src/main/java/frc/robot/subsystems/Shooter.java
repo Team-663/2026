@@ -46,6 +46,7 @@ import frc.robot.Constants.ShooterConstants;;
 public class Shooter extends SubsystemBase
 {
     // Shooter has 5 motors: 1x kicker, 1x turret, 1x hood, 2x flywheel (master/slave)
+    private final SparkMax m_agitatorMotor = new SparkMax(CANConstants.INTAKE_AGITATOR_CAN_ID, MotorType.kBrushed);
     private final SparkMax m_kickerMotor = new SparkMax(CANConstants.SHOOTER_KICKER_CAN_ID, MotorType.kBrushless);
     private final SparkMax m_turretMotor = new SparkMax(CANConstants.SHOOTER_TURRET_CAN_ID, MotorType.kBrushless);
     private final TalonSRX m_hoodMotor = new TalonSRX(CANConstants.SHOOTER_HOOD_CAN_ID);
@@ -69,6 +70,7 @@ public class Shooter extends SubsystemBase
         ShooterInitHood();
         ShooterInitTurret();
         ShooterInitKicker();
+        ShooterInitAgitator();
         ShooterInitFlywheel();
     }
 
@@ -151,28 +153,48 @@ public class Shooter extends SubsystemBase
             PersistMode.kPersistParameters);
     }
 
+    private void ShooterInitAgitator()
+    {
+        SparkMaxConfig agitatorConfig = new SparkMaxConfig();
+        agitatorConfig.inverted(false);
+        agitatorConfig.idleMode(IdleMode.kBrake);
+        m_agitatorMotor.configure(agitatorConfig, ResetMode.kResetSafeParameters,
+            PersistMode.kPersistParameters);
+    }
+
     private void ShooterInitHood()
     {
-        // Hood motor uses TalonSRX controller
-        
-        m_hoodMotor.configFactoryDefault();
-        m_hoodMotor.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Relative); // TODO: verify encoder type
-        m_hoodMotor.setSensorPhase(true);
+        // Hood motor: BAG motor on TalonSRX with SRX Mag Encoder on output shaft via data port
+        m_hoodMotor.configFactoryDefault(m_talonTimeoutMs);
+
+        // Feedback sensor: SRX Mag Encoder in relative mode — zeroes on boot
+        m_hoodMotor.configSelectedFeedbackSensor(FeedbackDevice.CTRE_MagEncoder_Relative, 0, m_talonTimeoutMs);
+        m_hoodMotor.setSensorPhase(true); // TODO: verify — if hood moves opposite to expected, flip this
+
+        // Zero the encoder on init so "0" = wherever the hood is at power-on
+        m_hoodMotor.setSelectedSensorPosition(0, 0, m_talonTimeoutMs);
+
+        // PID gains (slot 0) — tuned for fine, slow hood control
+        m_hoodMotor.config_kP(0, ShooterConstants.HOOD_PID_P, m_talonTimeoutMs);
+        m_hoodMotor.config_kI(0, ShooterConstants.HOOD_PID_I, m_talonTimeoutMs);
+        m_hoodMotor.config_kD(0, ShooterConstants.HOOD_PID_D, m_talonTimeoutMs);
+        m_hoodMotor.config_kF(0, ShooterConstants.HOOD_PID_FF, m_talonTimeoutMs);
+        m_hoodMotor.config_IntegralZone(0, ShooterConstants.HOOD_PID_IZONE, m_talonTimeoutMs);
         m_hoodMotor.configAllowableClosedloopError(0, ShooterConstants.HOOD_ERROR_TOLERANCE, m_talonTimeoutMs);
 
-        m_hoodMotor.configClosedLoopPeakOutput(0, ShooterConstants.HOOD_MAX_OUTPUT_UP, m_talonTimeoutMs);
-        m_hoodMotor.config_kP(0, ShooterConstants.HOOD_PID_P);
-        m_hoodMotor.config_kI(0, ShooterConstants.HOOD_PID_I);
-        m_hoodMotor.config_kD(0, ShooterConstants.HOOD_PID_D);
-        m_hoodMotor.config_kF(0, ShooterConstants.HOOD_PID_FF);
+        // Clamp peak output for fine control — 0.2 in either direction
+        m_hoodMotor.configClosedLoopPeakOutput(0, ShooterConstants.HOOD_MAX_OUTPUT, m_talonTimeoutMs);
+        m_hoodMotor.configPeakOutputForward(ShooterConstants.HOOD_MAX_OUTPUT, m_talonTimeoutMs);
+        m_hoodMotor.configPeakOutputReverse(-ShooterConstants.HOOD_MAX_OUTPUT, m_talonTimeoutMs);
 
-        //TODO: enable soft limits when we have hood position ranges from the encoder
+        // Ramp rate for smooth motion
+        m_hoodMotor.configClosedloopRamp(ShooterConstants.HOOD_CLOSED_LOOP_RAMP, m_talonTimeoutMs);
+
+        // Soft limits — enforced by the TalonSRX firmware
         m_hoodMotor.configForwardSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_FORWARD, m_talonTimeoutMs);
-        m_hoodMotor.configForwardSoftLimitEnable(false);
+        m_hoodMotor.configForwardSoftLimitEnable(true, m_talonTimeoutMs);
         m_hoodMotor.configReverseSoftLimitThreshold(ShooterConstants.HOOD_SOFT_LIMIT_REVERSE, m_talonTimeoutMs);
-        m_hoodMotor.configReverseSoftLimitEnable(false);
-        
-    
+        m_hoodMotor.configReverseSoftLimitEnable(true, m_talonTimeoutMs);
     }
 
     private void setShooterPctOutput(double value)
@@ -198,6 +220,13 @@ public class Shooter extends SubsystemBase
         return Math.abs(currentRPM - m_targetShooterRPM) <= ShooterConstants.SHOOTER_ERROR_TOLERANCE_RPM;
     }
 
+    /** Returns true when the flywheel is spinning fast enough to safely accept a ball. */
+    public boolean isShooterAboveMinRPM()
+    {
+        double currentRPM = m_shooterMaster.getVelocity().getValueAsDouble() * 60.0;
+        return currentRPM >= ShooterConstants.SHOOTER_RPM_MIN_FEED;
+    }
+
     public Command setShooterPctOutputCmd(DoubleSupplier output)
     {
         return run( ()-> {
@@ -219,16 +248,69 @@ public class Shooter extends SubsystemBase
         return Commands.run(() -> shooterStop(), this).withName("ShooterOff");
     }
 
-    private void setHoodPosition(double angle)
+    /**
+     * Commands the hood to a position in native sensor units (SRX Mag Encoder ticks).
+     * 4096 ticks = 1 revolution of the encoder (16t gear) shaft.
+     */
+    private void setHoodPosition(double positionTicks)
     {
-        // TODO: implement hood position control
-        m_targetHoodPosition = angle;
-        //m_shooterHood.set(ControlMode.Position, angle);
+        m_targetHoodPosition = positionTicks;
+        m_hoodMotor.set(ControlMode.Position, positionTicks);
+    }
+
+    /** Resets the hood encoder position to 0. Useful for re-zeroing during debugging. */
+    public void resetHoodEncoder()
+    {
+        m_hoodMotor.setSelectedSensorPosition(0, 0, m_talonTimeoutMs);
+        m_targetHoodPosition = 0.0;
+    }
+
+    /**
+     * Convenience: set the hood position in degrees of the 200-tooth output gear.
+     * Clamped to [0, HOOD_MAX_ANGLE_DEG] for safety.
+     *
+     * @param degrees angle of the 200t gear relative to its zero position
+     */
+    public void setHoodAngle(double degrees)
+    {
+        degrees = Math.max(ShooterConstants.HOOD_MIN_ANGLE_DEG,
+                  Math.min(degrees, ShooterConstants.HOOD_MAX_ANGLE_DEG));
+        setHoodPosition(degrees * ShooterConstants.HOOD_TICKS_PER_DEGREE);
+    }
+
+    /** Returns the current hood angle in degrees of the 200-tooth gear. */
+    public double getHoodAngle()
+    {
+        return m_hoodMotor.getSelectedSensorPosition() / ShooterConstants.HOOD_TICKS_PER_DEGREE;
+    }
+
+    /** Returns true when the hood is within the allowable error of its target. */
+    public boolean isHoodAtTarget()
+    {
+        return Math.abs(m_hoodMotor.getSelectedSensorPosition() - m_targetHoodPosition)
+                <= ShooterConstants.HOOD_ERROR_TOLERANCE;
+    }
+
+    /** Command to move the hood to a specific angle of the 200-tooth gear (degrees). */
+    public Command setHoodAngleCmd(double degrees)
+    {
+        return Commands.runOnce(() -> setHoodAngle(degrees), this)
+            .withName("HoodAngle_" + degrees);
+    }
+
+    /** Command to move the hood to a specific position (native sensor ticks). */
+    public Command setHoodPositionCmd(double positionTicks)
+    {
+        return Commands.runOnce(() -> setHoodPosition(positionTicks), this)
+            .withName("HoodPosition_" + positionTicks);
     }
 
     private void setHoodPctOutput(double output)
     {
-        m_hoodMotor.set(ControlMode.PercentOutput, output*ShooterConstants.HOOD_MANUAL_SPEED_SCALAR);
+        output = output * ShooterConstants.HOOD_MANUAL_SPEED_SCALAR;
+        output = Math.max(-ShooterConstants.HOOD_MAX_OUTPUT,
+                 Math.min(output, ShooterConstants.HOOD_MAX_OUTPUT));
+        m_hoodMotor.set(ControlMode.PercentOutput, output);
     }
 
     public Command setHoodPctOutputCmd(DoubleSupplier output)
@@ -266,7 +348,7 @@ public class Shooter extends SubsystemBase
                 new InstantCommand(() -> setTurretPctOutput(0.0)));
     }
 
-    private void setKickerPctOutput(double output)
+    public void setKickerPctOutput(double output)
     {
         m_kickerMotor.set(output);
     }
@@ -281,6 +363,24 @@ public class Shooter extends SubsystemBase
     {
         return Commands.sequence(
                 new InstantCommand(() -> setKickerPctOutput(0.0)));
+    }
+
+    public void setAgitatorPctOutput(double output)
+    {
+        SmartDashboard.putNumber("Intake/AgitatorOutput", output);
+        m_agitatorMotor.set(output);
+    }
+
+    public Command setAgitatorPctOutputCmd(DoubleSupplier output)
+    {
+        return run( ()-> {setAgitatorPctOutput(output.getAsDouble());})
+            .withName("AgitatorByXbox");
+    }
+
+    public Command agitatorOffCmd()
+    {
+        return Commands.sequence(
+                new InstantCommand(() -> setAgitatorPctOutput(0.0)));
     }
 
     private void updateSmartDashboard()
@@ -298,13 +398,21 @@ public class Shooter extends SubsystemBase
         
         
         SmartDashboard.putNumber("Hood/Setpoint", m_targetHoodPosition);
+        SmartDashboard.putNumber("Hood/Setpoint_Deg", m_targetHoodPosition / ShooterConstants.HOOD_TICKS_PER_DEGREE);
         SmartDashboard.putNumber("Hood/Position", m_hoodMotor.getSelectedSensorPosition());
+        SmartDashboard.putNumber("Hood/Angle_Deg", getHoodAngle());
+        SmartDashboard.putNumber("Hood/Error", m_targetHoodPosition - m_hoodMotor.getSelectedSensorPosition());
         SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
+        SmartDashboard.putBoolean("Hood/AtTarget", isHoodAtTarget());
 
         SmartDashboard.putNumber("Turret/Setpoint", m_targetTurretPosition);
         SmartDashboard.putNumber("Turret/Position", m_turretMotor.getEncoder().getPosition());
         SmartDashboard.putNumber("Turret/Speed", m_turretMotor.getEncoder().getVelocity());
 
         SmartDashboard.putNumber("Kicker/Speed", m_kickerMotor.getAppliedOutput());
+
+        // Aggitator speed and current
+        SmartDashboard.putNumber("Agitator/Speed", m_agitatorMotor.getAppliedOutput());
+        SmartDashboard.putNumber("Agitator/Current", m_agitatorMotor.getOutputCurrent());
     }
 }
