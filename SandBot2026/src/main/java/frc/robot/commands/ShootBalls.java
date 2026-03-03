@@ -31,7 +31,9 @@ public class ShootBalls extends Command {
   /** Creates a new ShootBalls command. */
   public ShootBalls(Shooter shooter) {
     m_shooter = shooter;
-    addRequirements(shooter);
+    // NOTE: Do NOT add Shooter as a requirement here. SpinShooter (which controls
+    // the flywheel and hood) runs concurrently with this command. Adding the same
+    // requirement would cancel SpinShooter the moment the trigger is pressed.
   }
 
   @Override

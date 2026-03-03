@@ -196,7 +196,8 @@ public class RobotContainer
         {
             
             driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyroWithAlliance)));
-            driverXbox.back().whileTrue(Commands.none());
+            // Reset the intake encoder zero offset to the current position when the back button is pressed, allowing it to be rezeroed if it drifts over time. Does not require redeploying code.
+            driverXbox.back().onTrue(intake.rezeroArmCmd());
             driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
             driverXbox.rightBumper().onTrue(Commands.none());
 
@@ -239,7 +240,7 @@ public class RobotContainer
                 .onFalse(Commands.runOnce(() -> {
                     shooter.setKickerPctOutput(0.0);
                     shooter.setAgitatorPctOutput(0.0);
-                }, shooter));
+                })); // no subsystem requirement — must not interrupt SpinShooter
 
             // Right bumper will drive both kicker and agitator backwards in case something is stuck    
            operatorXbox.rightBumper()

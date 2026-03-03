@@ -121,32 +121,53 @@ public class Constants
 
     public static class IntakeConstants
     {
-        // 16:1 gearbox — 16 rotor rotations per 1 output-shaft rotation.
-        // Setting this factor makes the SparkMax encoder report in output-shaft rotations,
-        // so a setpoint of 1.0 = one full rotation of the arm shaft.
-        public static final double INTAKE_ARM_ENCODER_CONVERSION_FACTOR = 1.0 / 16.0;
+        // ----------------------------------------------------------------------------------
+        // Through Bore Encoder wired to roboRIO DIO.
+        //   • White  (ABS, duty-cycle) → DIO 0  (absolute position within 1 revolution)
+        //   • Green  (Index)           → DIO 1  (1 pulse per revolution, for turn counting)
+        //
+        // Breakout cable colors:  White=ABS, Yellow=ChA, Blue=ChB, Green=Index
+        //
+        // Position units throughout: output-shaft ROTATIONS (1.0 = one full turn).
+        // The absolute signal gives precise position within one turn (0.0–1.0).
+        // The index pulse counts full revolutions for multi-turn tracking.
+        // Combined: position = (turnCount + absPosition) gives continuous multi-turn position.
+        // ----------------------------------------------------------------------------------
 
-        // Starting PID values for the arm position loop (output-shaft rotations).
-        // kP = 2.0 → 1 rotation of error produces 200% output (clamped by maxOutput).
-        //            This ensures the motor drives hard even when close to the setpoint.
-        //            Reduce if the arm oscillates or jerks violently on arrival.
-        // kI = 0.0 → add only if there is a persistent steady-state error.
-        // kD = 0.1 → damping to reduce overshoot; scale with kP adjustments.
-        // kFF = 0.0 → use ArbFeedForward at runtime to counteract gravity instead.
+        public static final int INTAKE_ARM_ABS_DIO_PORT   = 0; // duty-cycle absolute (white)
+        public static final int INTAKE_ARM_INDEX_DIO_PORT = 1; // index pulse (green)
+
+        // Absolute encoder zero offset (0.0–1.0).
+        // Set this to the raw absolute encoder reading when the arm is at your
+        // desired "zero" / home position. All position readings will then be
+        // relative to that point (home = 0.0).
+        // To calibrate: move the arm to home, read "Intake/ArmPositionAbsRaw"
+        // from SmartDashboard, and paste that value here.
+        public static final double INTAKE_ARM_ABS_ZERO_OFFSET =  0.896;// TODO: set to measured value at home
+
+        // Named arm positions (output-shaft rotations, multi-turn capable).
+        public static final double INTAKE_ARM_STOWED = 0.0;
+        public static final double INTAKE_ARM_DEPLOYED = 1.1;
+
+        // PID values for the arm position loop (units = rotations).
         public static final double INTAKE_ARM_PID_P = 2.0;
         public static final double INTAKE_ARM_PID_I = 0.0;
         public static final double INTAKE_ARM_PID_D = 0.1;
-        public static final double INTAKE_ARM_PID_FF = 0.0;
 
-        // Allowable position error before considering the arm "at target" (output-shaft rotations)
-        public static final double INTAKE_ARM_ERROR_TOLERANCE = 0.05; // ~18 degrees of output shaft
+        // Allowable position error (rotations). 0.02 ≈ 7° of output shaft.
+        public static final double INTAKE_ARM_ERROR_TOLERANCE = 0.02;
 
-        public static final double INTAKE_ARM_MAX_OUTPUT = 0.6;      // raised from 0.3; lower again if motion is too aggressive
+        // Separate forward/reverse output limits — forward (deploy) is capped lower for safety.
+        public static final double INTAKE_ARM_MAX_OUTPUT_FORWARD = 0.3; // positive motor direction
+        public static final double INTAKE_ARM_MAX_OUTPUT_REVERSE = 0.6; // negative motor direction
+        // Legacy alias used by PID clamp — keeps PID symmetric at the stricter forward limit.
+        public static final double INTAKE_ARM_MAX_OUTPUT = INTAKE_ARM_MAX_OUTPUT_FORWARD;
         public static final double INTAKE_ARM_MAX_OUTPUT_XBOX = 1.0;
 
-        // TODO: measure these limits by slowly jogging the arm to its physical stops
-        public static final double INTAKE_ARM_SOFT_LIMIT_FORWARD = 0.0;  // output-shaft rotations (stowed)
-        public static final double INTAKE_ARM_SOFT_LIMIT_REVERSE = -5.0; // output-shaft rotations (deployed) -- placeholder
+        // Software soft limits (corrected output-shaft rotations).
+        // Motor output is zeroed when position is outside this range.
+        public static final double INTAKE_ARM_SOFT_LIMIT_MIN = -0.15; // most-reverse allowed position
+        public static final double INTAKE_ARM_SOFT_LIMIT_MAX =  1.5;  // most-forward allowed position
 
         public static final double INTAKE_ROLLER_IN_SPEED = 0.95;
         public static final double INTAKE_ROLLER_OUT_SPEED = -0.75;
