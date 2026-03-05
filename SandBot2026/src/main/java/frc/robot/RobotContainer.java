@@ -30,6 +30,7 @@ import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Intake;
 import frc.robot.commands.AutoSetTurret;
 import frc.robot.commands.AutoShootBalls;
+import com.pathplanner.lib.commands.PathPlannerAuto;
 import frc.robot.commands.ShootBalls;
 import frc.robot.commands.SpinShooter;
 import swervelib.SwerveInputStream;
@@ -131,9 +132,32 @@ public class RobotContainer
         // Set the default auto (do nothing)
         autoChooser.setDefaultOption("Do Nothing", Commands.none());
 
-        // Add a simple auto option to have the robot drive forward for 1 second then
-        // stop
-        autoChooser.addOption("Drive Forward", drivebase.driveForward().withTimeout(1));
+        // ── Basic drive tests ──────────────────────────────────────────────────
+        autoChooser.addOption("Drive Forward 1s", drivebase.driveForward().withTimeout(1));
+
+        // ── Shooter tests (spin up + feed, no driving) ────────────────────────
+        autoChooser.addOption("Test: Shoot Close (5s)",
+            AutoShootBalls.create(shooter, ShooterConstants.SHOOTER_RPM_LOW,    ShooterConstants.HOOD_ANGLE_SHORT_SHOT,  5.0));
+        autoChooser.addOption("Test: Shoot Mid (5s)",
+            AutoShootBalls.create(shooter, ShooterConstants.SHOOTER_RPM_MEDIUM, ShooterConstants.HOOD_ANGLE_MEDIUM_SHOT, 5.0));
+        autoChooser.addOption("Test: Shoot Long (5s)",
+            AutoShootBalls.create(shooter, ShooterConstants.SHOOTER_RPM_HIGH,   ShooterConstants.HOOD_ANGLE_LONG_SHOT,   5.0));
+
+        // ── Turret tests ──────────────────────────────────────────────────────
+        autoChooser.addOption("Test: Turret Center",    AutoSetTurret.create(shooter,  0.0, 2.0));
+        autoChooser.addOption("Test: Turret Left 40°",  AutoSetTurret.create(shooter, -40.0, 2.0));
+        autoChooser.addOption("Test: Turret Right 40°", AutoSetTurret.create(shooter,  40.0, 2.0));
+
+        // ── Intake tests ──────────────────────────────────────────────────────
+        autoChooser.addOption("Test: Deploy Intake",
+            intake.setArmPositionCmd(Constants.IntakeConstants.INTAKE_ARM_DEPLOYED));
+        autoChooser.addOption("Test: Stow Intake",
+            intake.setArmPositionCmd(Constants.IntakeConstants.INTAKE_ARM_STOWED));
+
+        // ── PathPlanner autos ─────────────────────────────────────────────────
+        autoChooser.addOption("Shoot Close Left Then Backup",  new PathPlannerAuto("ShootCloseLeftThenBackup"));
+        autoChooser.addOption("Shoot Close Mid Then Backup",   new PathPlannerAuto("ShootCloseMidThenBackup"));
+        autoChooser.addOption("Shoot Close Right Then Backup", new PathPlannerAuto("ShootCloseRightThenBackup"));
 
         // Put the autoChooser on the SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
@@ -308,6 +332,6 @@ public class RobotContainer
 
     public Command getAutonomousCommand()
     {
-        return Commands.print("No autonomous command configured");
+        return autoChooser.getSelected();
     }
 }

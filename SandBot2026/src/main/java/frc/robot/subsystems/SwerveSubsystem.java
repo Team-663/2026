@@ -52,7 +52,9 @@ public class SwerveSubsystem extends SubsystemBase
     public SwerveSubsystem(File directory)
     {
          
-        boolean blueAlliance = false;
+        boolean blueAlliance = DriverStation.getAlliance()
+                                            .map(a -> a == DriverStation.Alliance.Blue)
+                                            .orElse(true); // default to blue if alliance unknown
         Pose2d startingPose = blueAlliance ? new Pose2d(new Translation2d(Meter.of(1),
                                                                         Meter.of(4)),
                                                         Rotation2d.fromDegrees(0))
