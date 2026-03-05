@@ -46,17 +46,44 @@ public class Constants
 
     public static class ShooterConstants
     {
-        public static final double TURRET_PID_P = 0.75;
-        public static final double TURRET_PID_I = 0.0;
-        public static final double TURRET_PID_D = 0.1;
-        public static final double TURRET_PID_FF = 0.0;
-        public static final double TURRET_ERROR_TOLERANCE = 1.0; // degrees
-        public static final double TURRET_ENCODER_CONVERSION_FACTOR = 360.0 / 4096.0; // degrees per encoder tick
-        public static final double TURRET_SOFT_LIMIT_FORWARD = 100.0; // degrees
-        public static final double TURRET_SOFT_LIMIT_REVERSE = -100.0;
+        // ----------------------------------------------------------------------------------
+        // Turret — REV Through Bore Encoder wired to roboRIO DIO.
+        //   • White  (ABS, duty-cycle) → DIO 2  (absolute position 0.0–1.0 per encoder rev)
+        //
+        // Gear mesh: 24-tooth encoder pulley → 200-tooth output pulley.
+        // Gear ratio: 200 / 24 ≈ 8.333 encoder revolutions per 1 turret output revolution.
+        // Position units throughout: output-shaft DEGREES.
+        //   absEncoderRaw (0.0–1.0) × 360° = encoder-shaft degrees.
+        //   encoder-shaft degrees / TURRET_GEAR_RATIO = output-shaft degrees.
+        //   Multi-turn: (turnCount × 360° + absEncoderShaftDeg) / TURRET_GEAR_RATIO
+        //
+        // Initialization guarantee: turret is always within ±10° of "straight" at power-on,
+        // so the absolute encoder reading at straight (TURRET_ABS_ZERO_OFFSET) unambiguously
+        // resolves the initial turn count to 0 without needing physical index hardware.
+        // ----------------------------------------------------------------------------------
+        public static final int    TURRET_ABS_DIO_PORT            = 2;    // duty-cycle absolute (white wire)
+        public static final double TURRET_GEAR_TEETH_ENCODER      = 24.0; // encoder-shaft pulley
+        public static final double TURRET_GEAR_TEETH_OUTPUT        = 140.0; // output-shaft pulley
+        public static final double TURRET_GEAR_RATIO =
+            TURRET_GEAR_TEETH_OUTPUT / TURRET_GEAR_TEETH_ENCODER; // ≈ 8.333
 
-        public static final double TURRET_MAX_OUTPUT = 0.25;     
-        public static final double TURRET_MAX_OUTPUT_XBOX = 1.0;
+        // Set to true if positive motor output moves the turret in the NEGATIVE encoder direction.
+        public static final boolean TURRET_MOTOR_INVERTED = true;
+
+        // Set to true if the encoder counts opposite to your desired positive direction.
+        public static final boolean TURRET_ENCODER_INVERTED = false;
+
+        public static final double TURRET_PID_P = 0.04;  // output per degree of error
+        public static final double TURRET_PID_I = 0.0;
+        public static final double TURRET_PID_D = 0.002;
+        public static final double TURRET_ERROR_TOLERANCE = 1.0; // degrees (output shaft)
+
+        // Soft travel limits — degrees of the output shaft, relative to straight = 0°.
+        public static final double TURRET_SOFT_LIMIT_FORWARD =  40.0; // degrees
+        public static final double TURRET_SOFT_LIMIT_REVERSE = -80.0; // degrees
+
+        public static final double TURRET_MAX_OUTPUT = 0.25;
+        public static final double TURRET_MAX_OUTPUT_XBOX = 0.25;
 
         // Hood motor: BAG motor + 16:1 gearbox, TalonSRX with SRX Mag Encoder on the
         // 16:1 output shaft. That shaft carries a 16-tooth gear meshed with a 200-tooth gear.
@@ -90,7 +117,7 @@ public class Constants
 
         public static final double HOOD_ANGLE_LONG_SHOT = 32.0;
         public static final double HOOD_ANGLE_MEDIUM_SHOT = 20.0;
-        public static final double HOOD_ANGLE_SHORT_SHOT = 10.0;
+        public static final double HOOD_ANGLE_SHORT_SHOT = 3.0;
 
         // Soft limits in native encoder ticks (derived from degree limits)
         public static final double HOOD_SOFT_LIMIT_FORWARD = HOOD_MAX_ANGLE_DEG * HOOD_TICKS_PER_DEGREE; // ~5689 ticks
@@ -103,12 +130,13 @@ public class Constants
         // Below is for 5500 RPM (91.7 RPS) at 12 V: 91.7 * 0.12 = 11.0 volts (leaves some headroom)
         public static final double SHOOTER_PID_FF_KV = 0.118; // Some commendations were 0.12 (phoenix6 is velocityVolts)
         public static final double SHOOTER_PID_FF_KS = 0.25;
-        public static final double SHOOTER_ERROR_TOLERANCE_RPM = 100.0;
-        public static final double SHOOTER_CURRENT_LIMIT = 100.0;
+        public static final double SHOOTER_ERROR_TOLERANCE_RPM = 300.0;
+        public static final double SHOOTER_CURRENT_LIMIT = 80.0;
 
-        public static final double SHOOTER_RPM_LOW = 3000.0;
-        public static final double SHOOTER_RPM_MEDIUM = 3800.0;
-        public static final double SHOOTER_RPM_HIGH = 5000.0;
+        public static final double SHOOTER_RPM_LOW = 2800.0;
+        public static final double SHOOTER_RPM_MEDIUM = 3400.0;
+
+        public static final double SHOOTER_RPM_HIGH = 4700.0; // was 5000 but drew too much power maybe
 
         // Minimum RPM the flywheel must be spinning before balls are fed in.
         // Prevents jamming if the shooter is idle or spinning up from rest.
@@ -147,7 +175,7 @@ public class Constants
 
         // Named arm positions (output-shaft rotations, multi-turn capable).
         public static final double INTAKE_ARM_STOWED = 0.0;
-        public static final double INTAKE_ARM_DEPLOYED = 1.1;
+        public static final double INTAKE_ARM_DEPLOYED = 1.2;
 
         // PID values for the arm position loop (units = rotations).
         public static final double INTAKE_ARM_PID_P = 2.0;
@@ -169,7 +197,7 @@ public class Constants
         public static final double INTAKE_ARM_SOFT_LIMIT_MIN = -0.15; // most-reverse allowed position
         public static final double INTAKE_ARM_SOFT_LIMIT_MAX =  1.5;  // most-forward allowed position
 
-        public static final double INTAKE_ROLLER_IN_SPEED = 0.95;
+        public static final double INTAKE_ROLLER_IN_SPEED = 0.85;
         public static final double INTAKE_ROLLER_OUT_SPEED = -0.75;
     }
 }

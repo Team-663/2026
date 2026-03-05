@@ -230,7 +230,10 @@ public class RobotContainer
                         .whileTrue(new SpinShooter(shooter, Constants.ShooterConstants.SHOOTER_RPM_HIGH, Constants.ShooterConstants.HOOD_ANGLE_LONG_SHOT))
                         .onFalse(shooter.shooterOffCmd());
 
-            //X Button undefined for now
+                            
+            //X Button sets turret angle to 0
+            operatorXbox.x()
+                .onTrue(shooter.setTurretAngleCmd(0.0));
             
             
             // Right trigger/bumpers are for the KICKER/AGITATOR
@@ -266,8 +269,8 @@ public class RobotContainer
             // Right stick X controls turret
             operatorXbox.axisGreaterThan(XboxController.Axis.kRightX.value, 0.15)
                 .or(operatorXbox.axisLessThan(XboxController.Axis.kRightX.value, -0.15))
-                .whileTrue(shooter.setTurretPctOutputCmd(()->operatorXbox.getRightX()*-1.0))
-                .onFalse(shooter.turretOffCmd());
+                .whileTrue(shooter.setTurretPctOutputCmd(()->operatorXbox.getRightX()*Constants.ShooterConstants.TURRET_MAX_OUTPUT_XBOX))
+                .onFalse(shooter.holdTurretPositionCmd());
 
             // Left stick Y controls hood
             operatorXbox.axisGreaterThan(XboxController.Axis.kLeftY.value, 0.15)
@@ -278,10 +281,14 @@ public class RobotContainer
             // Operator D-pad will set the hood to specific angles for now (can be changed to buttons later if preferred)
             operatorXbox.povUp()
                 .whileTrue(shooter.setHoodAngleCmd(Constants.ShooterConstants.HOOD_ANGLE_LONG_SHOT));
-            operatorXbox.povRight()
-                .whileTrue(shooter.setHoodAngleCmd(Constants.ShooterConstants.HOOD_ANGLE_MEDIUM_SHOT));
-            operatorXbox.povDown()
+                operatorXbox.povDown()
                 .whileTrue(shooter.setHoodAngleCmd(2.0));
+                
+                // Operator left POV sets the turret to 30 degrees
+                operatorXbox.povLeft()
+                    .onTrue(shooter.setTurretAngleCmd(Constants.ShooterConstants.TURRET_SOFT_LIMIT_REVERSE));
+                operatorXbox.povRight()
+                    .onTrue(shooter.setTurretAngleCmd(Constants.ShooterConstants.TURRET_SOFT_LIMIT_FORWARD));
 
             // Start button resets the hood encoder to 0 for debugging
             operatorXbox.start()

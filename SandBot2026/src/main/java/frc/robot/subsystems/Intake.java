@@ -58,6 +58,10 @@ public class Intake extends SubsystemBase
     {
         IntakeInitMotors();
         m_armPID.setTolerance(IntakeConstants.INTAKE_ARM_ERROR_TOLERANCE);
+        // Always zero the encoder at startup. The arm must be at the home position
+        // when the robot is powered on. This prevents drift accumulating across
+        // power cycles from the absolute encoder.
+        rezeroArm();
     }
 
     private void IntakeInitMotors()
@@ -231,8 +235,6 @@ public class Intake extends SubsystemBase
             output = MathUtil.clamp(output, 0, IntakeConstants.INTAKE_ARM_MAX_OUTPUT_FORWARD);
         else
             output = MathUtil.clamp(output, -IntakeConstants.INTAKE_ARM_MAX_OUTPUT_REVERSE, 0);
-        // Software soft limits
-        output = applySoftLimits(output, getArmPosition());
         m_armMotor.set(output);
     }
 

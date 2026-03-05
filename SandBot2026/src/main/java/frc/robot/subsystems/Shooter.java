@@ -13,35 +13,29 @@ import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.configs.MotorOutputConfigs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.Follower;
-import com.ctre.phoenix6.controls.PositionVoltage;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.MotorAlignmentValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
-import com.ctre.phoenix6.controls.Follower;
-import com.revrobotics.RelativeEncoder;
-import com.revrobotics.spark.FeedbackSensor;
-import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
-import com.revrobotics.spark.config.FeedForwardConfig;
 import com.revrobotics.spark.config.SparkMaxConfig;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
-import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.ResetMode;
 import com.revrobotics.PersistMode;
 
-import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.wpilibj.DutyCycleEncoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.FunctionalCommand;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants.CANConstants;
-import frc.robot.Constants.ShooterConstants;;
+import frc.robot.Constants.ShooterConstants;
 
 public class Shooter extends SubsystemBase
 {
@@ -53,17 +47,41 @@ public class Shooter extends SubsystemBase
     private final TalonFX m_shooterMaster = new TalonFX(CANConstants.SHOOTER_MASTER_CAN_ID);
     private final TalonFX m_shooterSlave = new TalonFX(CANConstants.SHOOTER_SLAVE_CAN_ID);
     
-    //private final SparkClosedLoopController m_turretPID = m_shooterTurret.getClosedLoopController();
+    // Turret: REV Through Bore Encoder on roboRIO DIO — absolute duty-cycle signal.
+    // The encoder sits on the 24t pulley shaft; the output pulley is 200t.
+    // Gear ratio = 200/24 ≈ 8.333 encoder revolutions per output revolution.
+    private final DutyCycleEncoder m_turretAbsEncoder =
+        new DutyCycleEncoder(ShooterConstants.TURRET_ABS_DIO_PORT);
 
-    //private final DigitalInput m_elevatorLimitLow = new DigitalInput(ArmConstants.ELEVATOR_LOW_LIMIT_SWITCH_PORT);
-    // EXAMPLE OF TALON FX POSITION PID
-    //private final TalonFX m_wrist = new TalonFX(Constants.ARM_WRIST_CAN_ID);
-    //private final PositionVoltage m_wristVoltage = new PositionVoltage(0);
+    // Software PID controller — runs in periodic() at ~50 Hz.
+    private final PIDController m_turretPID = new PIDController(
+        ShooterConstants.TURRET_PID_P,
+        ShooterConstants.TURRET_PID_I,
+        ShooterConstants.TURRET_PID_D);
+
+    // Continuous turret position tracking.
+    // m_turretPositionDeg holds the accumulated output-shaft position in degrees.
+    // Updated every cycle by looking at how much the raw encoder moved (delta).
+    private double  m_turretPositionDeg = 0.0;  // continuous output-shaft degrees, 0 = straight
+    private double  m_turretPrevRaw     = 0.0;  // previous SHIFTED encoder reading
+    private boolean m_turretFirstRead   = true;
+
+    // Offset applied to every raw reading so that "home" maps to 0.5 instead of
+    // whatever the encoder happens to read at boot. This pushes the 0↔1 wrap
+    // boundary far away from normal operating range, preventing noise-induced
+    // phantom wraps. Set by rezeroTurret().
+    private double  m_turretRawOffset   = 0.0;
+
+    // True while the software PID should be driving the turret motor.
+    private boolean m_turretPIDEnabled  = false;
+    // Last PID output value, stored for SmartDashboard (avoid calling calculate() twice)
+    private double  m_turretPIDOutput   = 0.0;
+
     private final int m_talonTimeoutMs = 10;
 
-    private double m_targetShooterRPM = 0.0;
-    private double m_targetHoodPosition = 0.0;
-    private double m_targetTurretPosition = 0.0;
+    private double m_targetShooterRPM     = 0.0;
+    private double m_targetHoodPosition   = 0.0;
+    private double m_targetTurretPosition = 0.0; // degrees, output shaft, 0 = straight
     /** Creates a new Shooter. */
     public Shooter()
     {
@@ -72,14 +90,35 @@ public class Shooter extends SubsystemBase
         ShooterInitKicker();
         ShooterInitAgitator();
         ShooterInitFlywheel();
+        rezeroTurret(); // seed turn count and zero offset from current position
     }
 
     @Override
     public void periodic()
     {
-        // This method will be called once per scheduler run
-        updateSmartDashboard();
+        // Always update the turret position tracker
+        updateTurretPosition();
 
+        // Run software PID for the turret when enabled
+        if (m_turretPIDEnabled)
+        {
+            double currentAngle = getTurretAngle();
+            double output = m_turretPID.calculate(currentAngle, m_targetTurretPosition);
+
+            m_turretPIDOutput = output;  // save for SmartDashboard
+
+            output = MathUtil.clamp(output,
+                -ShooterConstants.TURRET_MAX_OUTPUT,
+                 ShooterConstants.TURRET_MAX_OUTPUT);
+
+            // Soft-limit enforcement: cut output if past the limit in that direction
+            if (currentAngle >= ShooterConstants.TURRET_SOFT_LIMIT_FORWARD && output > 0) output = 0;
+            if (currentAngle <= ShooterConstants.TURRET_SOFT_LIMIT_REVERSE && output < 0) output = 0;
+
+            m_turretMotor.set(output);
+        }
+
+        updateSmartDashboard();
     }
 
     private void ShooterInitFlywheel()
@@ -126,22 +165,16 @@ public class Shooter extends SubsystemBase
 
     private void ShooterInitTurret()
     {
+        // SparkMax drives the turret motor in open-loop; PID runs in software via periodic().
         SparkMaxConfig turretConfig = new SparkMaxConfig();
-        turretConfig.inverted(false);
+        turretConfig.inverted(ShooterConstants.TURRET_MOTOR_INVERTED);
         turretConfig.idleMode(IdleMode.kBrake);
-        turretConfig.closedLoop.pid(ShooterConstants.TURRET_PID_P, ShooterConstants.TURRET_PID_I, ShooterConstants.TURRET_PID_D);
-
-        turretConfig.closedLoop.feedbackSensor(FeedbackSensor.kAbsoluteEncoder);
-        turretConfig.encoder.positionConversionFactor(ShooterConstants.TURRET_ENCODER_CONVERSION_FACTOR);
-        turretConfig.closedLoop.maxOutput(ShooterConstants.TURRET_MAX_OUTPUT);
-
-        turretConfig.softLimit.forwardSoftLimit(ShooterConstants.TURRET_SOFT_LIMIT_FORWARD);
-        turretConfig.softLimit.forwardSoftLimitEnabled(false);
-        turretConfig.softLimit.reverseSoftLimit(ShooterConstants.TURRET_SOFT_LIMIT_REVERSE);
-        turretConfig.softLimit.reverseSoftLimitEnabled(false);
+        turretConfig.smartCurrentLimit(30); // stall protection for the turret
 
         m_turretMotor.configure(turretConfig, ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
+
+        m_turretPID.setTolerance(ShooterConstants.TURRET_ERROR_TOLERANCE);
     }
 
     private void ShooterInitKicker()
@@ -325,27 +358,140 @@ public class Shooter extends SubsystemBase
                 new InstantCommand(() -> setHoodPctOutput(0.0)));
     }
 
-    private void setTurretPosition(double angle)
+    // -------------------------------------------------------------------------
+    // Turret — simple delta-based position tracking
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called every periodic() to accumulate encoder movement into m_turretPositionDeg.
+     *
+     * Reads the raw encoder, applies m_turretRawOffset so that the "home" position
+     * sits at 0.5 (far from the 0/1 wrap boundary), computes the delta from the
+     * previous shifted reading, unwraps it if needed, and accumulates.
+     */
+    private void updateTurretPosition()
     {
-        m_targetTurretPosition = angle;
-        //m_turretMotor.getClosedLoopController().setSetpoint(angle, ControlType.kPosition);
+        // Shift raw reading so home ≈ 0.5.  Result stays in [0.0, 1.0).
+        double shifted = (m_turretAbsEncoder.get() - m_turretRawOffset + 1.0) % 1.0;
+
+        if (m_turretFirstRead)
+        {
+            m_turretPrevRaw   = shifted;
+            m_turretFirstRead = false;
+            return;
+        }
+
+        double delta = shifted - m_turretPrevRaw;
+
+        // Unwrap: a jump > 0.5 in one 20 ms cycle means the encoder wrapped.
+        if (delta > 0.5)       delta -= 1.0;
+        else if (delta < -0.5) delta += 1.0;
+
+        // Convert delta (encoder-shaft revolutions) to output-shaft degrees.
+        double sign = ShooterConstants.TURRET_ENCODER_INVERTED ? -1.0 : 1.0;
+        m_turretPositionDeg += (delta * 360.0 / ShooterConstants.TURRET_GEAR_RATIO) * sign;
+
+        m_turretPrevRaw = shifted;
+    }
+
+    /** Returns the turret output-shaft position in degrees. 0 = wherever it was at startup. */
+    public double getTurretAngle()
+    {
+        return m_turretPositionDeg;
+    }
+
+    /**
+     * Zeros the turret position to 0 at the current physical location.
+     * Also sets m_turretRawOffset so the current raw reading maps to 0.5,
+     * keeping the wrap boundary as far away as possible from normal operation.
+     */
+    public void rezeroTurret()
+    {
+        // Offset = rawNow − 0.5, so (raw − offset) % 1.0 = 0.5 at this instant.
+        m_turretRawOffset      = m_turretAbsEncoder.get() - 0.5;
+        m_turretPrevRaw        = 0.5;  // shifted value right now
+        m_turretFirstRead      = false;
+        m_turretPositionDeg    = 0.0;
+        m_targetTurretPosition = 0.0;
+        m_turretPIDEnabled     = false;
+        m_turretMotor.stopMotor();
+    }
+
+    /**
+     * Commands the turret to a target angle (degrees of output shaft, 0 = straight).
+     * Enables the software PID loop which runs in periodic().
+     */
+    public void setTurretAngle(double degrees)
+    {
+        degrees = MathUtil.clamp(degrees,
+            ShooterConstants.TURRET_SOFT_LIMIT_REVERSE,
+            ShooterConstants.TURRET_SOFT_LIMIT_FORWARD);
+        m_targetTurretPosition = degrees;
+        m_turretPIDEnabled     = true;
+    }
+
+    /** Returns true when the turret is within tolerance of its target angle. */
+    public boolean isTurretAtTarget()
+    {
+        return m_turretPIDEnabled && m_turretPID.atSetpoint();
+    }
+
+    /** Stops the turret motor and disables the PID loop. */
+    public void turretStop()
+    {
+        m_turretPIDEnabled = false;
+        m_turretMotor.stopMotor();
+    }
+
+    /** Command to move the turret to a specific angle (degrees, output shaft). */
+    public Command setTurretAngleCmd(double degrees)
+    {
+        return Commands.runOnce(() -> setTurretAngle(degrees))
+            .withName("TurretAngle_" + degrees);
+    }
+
+    /** Snapshots the current angle and holds it with closed-loop. */
+    public void holdTurretPosition()
+    {
+        setTurretAngle(getTurretAngle());
+    }
+
+    /** Command version — use as .onFalse() when releasing the manual stick. */
+    public Command holdTurretPositionCmd()
+    {
+        return Commands.runOnce(() -> holdTurretPosition())
+            .withName("TurretHold");
+    }
+
+    /** Command to re-zero the turret at its current position. */
+    public Command rezeroTurretCmd()
+    {
+        return Commands.runOnce(() -> rezeroTurret())
+            .withName("TurretRezero");
     }
 
     private void setTurretPctOutput(double output)
     {
+        // Disable PID while in manual mode so it doesn't fight the stick.
+        m_turretPIDEnabled = false;
+
+        // Enforce soft limits: zero the output if already past a limit in that direction.
+        double currentAngle = getTurretAngle();
+        if (currentAngle >= ShooterConstants.TURRET_SOFT_LIMIT_FORWARD && output > 0) output = 0;
+        if (currentAngle <= ShooterConstants.TURRET_SOFT_LIMIT_REVERSE && output < 0) output = 0;
+
         m_turretMotor.set(output);
     }
 
     public Command setTurretPctOutputCmd(DoubleSupplier output)
     {
-        return run( ()-> {setTurretPctOutput(output.getAsDouble());})
+        return Commands.run(() -> setTurretPctOutput(output.getAsDouble()))
             .withName("TurretByXbox");
     }
 
     public Command turretOffCmd()
     {
-        return Commands.sequence(
-                new InstantCommand(() -> setTurretPctOutput(0.0)));
+        return Commands.runOnce(() -> setTurretPctOutput(0.0));
     }
 
     public void setKickerPctOutput(double output)
@@ -405,9 +551,15 @@ public class Shooter extends SubsystemBase
         SmartDashboard.putNumber("Hood/Speed", m_hoodMotor.getMotorOutputPercent());
         SmartDashboard.putBoolean("Hood/AtTarget", isHoodAtTarget());
 
-        SmartDashboard.putNumber("Turret/Setpoint", m_targetTurretPosition);
-        SmartDashboard.putNumber("Turret/Position", m_turretMotor.getEncoder().getPosition());
-        SmartDashboard.putNumber("Turret/Speed", m_turretMotor.getEncoder().getVelocity());
+        SmartDashboard.putNumber("Turret/Setpoint_Deg", m_targetTurretPosition);
+        SmartDashboard.putNumber("Turret/Angle_Deg", getTurretAngle());
+        SmartDashboard.putNumber("Turret/AbsRaw", m_turretAbsEncoder.get());
+        SmartDashboard.putBoolean("Turret/AtTarget", isTurretAtTarget());
+        SmartDashboard.putBoolean("Turret/PIDEnabled", m_turretPIDEnabled);
+        SmartDashboard.putNumber("Turret/Error_Deg", m_targetTurretPosition - getTurretAngle());
+        SmartDashboard.putNumber("Turret/Output", m_turretMotor.getAppliedOutput());
+        SmartDashboard.putNumber("Turret/PID_Output", m_turretPIDOutput);
+        SmartDashboard.putBoolean("Turret/EncoderConnected", m_turretAbsEncoder.isConnected());
 
         SmartDashboard.putNumber("Kicker/Speed", m_kickerMotor.getAppliedOutput());
 
