@@ -5,9 +5,27 @@
     "data": {
       "commands": [
         {
+          "type": "path",
+          "data": {
+            "pathName": "centerCloseBackup"
+          }
+        },
+        {
           "type": "named",
           "data": {
-            "name": "ShootBalls"
+            "name": "DeployIntake"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ShootBallsClose"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Backwards3ft"
           }
         }
       ]

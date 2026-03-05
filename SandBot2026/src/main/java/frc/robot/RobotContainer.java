@@ -24,9 +24,12 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Constants.OperatorConstants;
+import frc.robot.Constants.ShooterConstants;
 import frc.robot.subsystems.SwerveSubsystem;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Intake;
+import frc.robot.commands.AutoSetTurret;
+import frc.robot.commands.AutoShootBalls;
 import frc.robot.commands.ShootBalls;
 import frc.robot.commands.SpinShooter;
 import swervelib.SwerveInputStream;
@@ -114,6 +117,13 @@ public class RobotContainer
 
         // Create the NamedCommands that will be used in PathPlanner
         NamedCommands.registerCommand("test", Commands.print("I EXIST"));
+        NamedCommands.registerCommand("ShootBallsClose", AutoShootBalls.create(shooter, ShooterConstants.SHOOTER_RPM_LOW, ShooterConstants.HOOD_ANGLE_SHORT_SHOT, 5));
+        NamedCommands.registerCommand("ShootBallsMid", AutoShootBalls.create(shooter, ShooterConstants.SHOOTER_RPM_MEDIUM, ShooterConstants.HOOD_ANGLE_MEDIUM_SHOT, 5));
+        NamedCommands.registerCommand("DeployIntake", intake.setArmPositionCmd(Constants.IntakeConstants.INTAKE_ARM_DEPLOYED));
+        NamedCommands.registerCommand("TurretCenter",   AutoSetTurret.create(shooter,  0.0, 2.0));
+        NamedCommands.registerCommand("TurretLeft90",   AutoSetTurret.create(shooter, -90.0, 2.0));
+        NamedCommands.registerCommand("TurretLeft40",   AutoSetTurret.create(shooter, -40.0, 2.0));
+        NamedCommands.registerCommand("TurretRight40",  AutoSetTurret.create(shooter,  40.0, 2.0));
 
         // Have the autoChooser pull in all PathPlanner autos as options
         autoChooser = AutoBuilder.buildAutoChooser();
@@ -212,10 +222,10 @@ public class RobotContainer
 
             // Driver bumpers will set the arm to "1" for Right bumper and "0 " for left bumper
             driverXbox.leftBumper()
-            .onTrue(intake.setArmPositionCmd(0.0));
+            .onTrue(intake.setArmPositionCmd(Constants.IntakeConstants.INTAKE_ARM_STOWED));
 
             driverXbox.rightBumper()
-            .onTrue(intake.setArmPositionCmd(1.0));
+            .onTrue(intake.setArmPositionCmd(Constants.IntakeConstants.INTAKE_ARM_DEPLOYED));
 
             
             // A button is for short shots

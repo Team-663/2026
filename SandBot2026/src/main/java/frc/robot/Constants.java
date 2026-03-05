@@ -80,7 +80,7 @@ public class Constants
 
         // Soft travel limits — degrees of the output shaft, relative to straight = 0°.
         public static final double TURRET_SOFT_LIMIT_FORWARD =  40.0; // degrees
-        public static final double TURRET_SOFT_LIMIT_REVERSE = -80.0; // degrees
+        public static final double TURRET_SOFT_LIMIT_REVERSE = -90.0; // degrees
 
         public static final double TURRET_MAX_OUTPUT = 0.25;
         public static final double TURRET_MAX_OUTPUT_XBOX = 0.25;
