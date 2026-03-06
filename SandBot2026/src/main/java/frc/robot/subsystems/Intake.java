@@ -150,7 +150,7 @@ public class Intake extends SubsystemBase
     {
         double raw = m_absEncoder.get();
         double corrected = raw - m_absZeroOffset;
-        // Wrap into (-0.5, 0.5]
+        // Wrap into [-0.5, 0.5]
         corrected = corrected % 1.0;
         if (corrected > 0.5)  corrected -= 1.0;
         if (corrected <= -0.5) corrected += 1.0;
