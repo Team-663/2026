@@ -27,7 +27,7 @@ public class Intake extends SubsystemBase
 {
     // Intake has 2x SparkMax motors: 1 for arm, 1 for roller
     private final SparkMax m_armMotor = new SparkMax(CANConstants.INTAKE_ARM_CAN_ID, MotorType.kBrushless);
-    private final SparkMax m_rollerMotor = new SparkMax(CANConstants.INTAKE_ROLLER_CAN_ID, MotorType.kBrushed);
+    private final SparkMax m_rollerMotor = new SparkMax(CANConstants.INTAKE_ROLLER_CAN_ID, MotorType.kBrushless);
 
     // Through Bore Encoder — absolute (duty-cycle) signal gives position within one revolution.
     private final DutyCycleEncoder m_absEncoder =

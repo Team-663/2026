@@ -52,9 +52,12 @@ public class SwerveSubsystem extends SubsystemBase
     public SwerveSubsystem(File directory)
     {
          
+        // NOTE: Alliance is typically unknown at construction time (DS hasn't connected yet),
+        // so we default to Red (orElse(false) = not blue). PathPlanner autos with resetOdom=true
+        // will override this anyway. For teleop, zeroGyroWithAlliance (driver Start button) corrects it.
         boolean blueAlliance = DriverStation.getAlliance()
                                             .map(a -> a == DriverStation.Alliance.Blue)
-                                            .orElse(true); // default to blue if alliance unknown
+                                            .orElse(false); // default to Red if alliance unknown
         Pose2d startingPose = blueAlliance ? new Pose2d(new Translation2d(Meter.of(1),
                                                                         Meter.of(4)),
                                                         Rotation2d.fromDegrees(0))

@@ -175,7 +175,7 @@ public class Constants
 
         // Named arm positions (output-shaft rotations, multi-turn capable).
         public static final double INTAKE_ARM_STOWED = 0.0;
-        public static final double INTAKE_ARM_DEPLOYED = 1.2;
+        public static final double INTAKE_ARM_DEPLOYED = 1.1;
 
         // PID values for the arm position loop (units = rotations).
         public static final double INTAKE_ARM_PID_P = 2.0;

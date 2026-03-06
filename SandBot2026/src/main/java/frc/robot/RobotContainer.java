@@ -28,6 +28,7 @@ import frc.robot.Constants.ShooterConstants;
 import frc.robot.subsystems.SwerveSubsystem;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Intake;
+import frc.robot.commands.AutoRunAgitator;
 import frc.robot.commands.AutoSetTurret;
 import frc.robot.commands.AutoShootBalls;
 import com.pathplanner.lib.commands.PathPlannerAuto;
@@ -58,13 +59,14 @@ public class RobotContainer
      * by angular velocity.
      */
     SwerveInputStream driveAngularVelocity = SwerveInputStream.of(drivebase.getSwerveDrive(),
-            () -> driverXbox.getLeftY(),
-            () -> driverXbox.getLeftX())
+            () -> -driverXbox.getLeftY(),
+            () -> -driverXbox.getLeftX())
             .withControllerRotationAxis(driverXbox::getRightX)
-            .scaleRotation(-1)
+            .scaleRotation(-0.5)
             .deadband(OperatorConstants.DEADBAND)
-            .scaleTranslation(0.8)
-            .allianceRelativeControl(true);
+            .scaleTranslation(1.0)
+            .allianceRelativeControl(true)
+            .cubeTranslationControllerAxis(true);
 
     /**
      * Clone's the angular velocity input stream and converts it to a fieldRelative
@@ -125,12 +127,21 @@ public class RobotContainer
         NamedCommands.registerCommand("TurretLeft90",   AutoSetTurret.create(shooter, -90.0, 2.0));
         NamedCommands.registerCommand("TurretLeft40",   AutoSetTurret.create(shooter, -40.0, 2.0));
         NamedCommands.registerCommand("TurretRight40",  AutoSetTurret.create(shooter,  40.0, 2.0));
+        NamedCommands.registerCommand("RunAgitator",     AutoRunAgitator.create(shooter, 0.5, 1.0));
+        NamedCommands.registerCommand("RunAgitatorBackwards", AutoRunAgitator.create(shooter, -.75, 0.25));
 
         // Have the autoChooser pull in all PathPlanner autos as options
         autoChooser = AutoBuilder.buildAutoChooser();
 
         // Set the default auto (do nothing)
         autoChooser.setDefaultOption("Do Nothing", Commands.none());
+
+        // ── PathPlanner autos ─────────────────────────────────────────────────
+        autoChooser.addOption("Shoot Close Left Then Backup",  new PathPlannerAuto("ShootCloseLeftThenBackup"));
+        autoChooser.addOption("Shoot Close Mid Then Backup",   new PathPlannerAuto("ShootCloseMidThenBackup"));
+        autoChooser.addOption("Shoot Close Right Then Backup", new PathPlannerAuto("ShootCloseRightThenBackup"));
+        autoChooser.addOption("Shoot Mid Left Then Backup",    new PathPlannerAuto("ShootMidLeftThenBackup"));
+        autoChooser.addOption("Shoot Mid Right Then Backup",   new PathPlannerAuto("ShootMidRightThenBackup"));
 
         // ── Basic drive tests ──────────────────────────────────────────────────
         autoChooser.addOption("Drive Forward 1s", drivebase.driveForward().withTimeout(1));
@@ -154,11 +165,7 @@ public class RobotContainer
         autoChooser.addOption("Test: Stow Intake",
             intake.setArmPositionCmd(Constants.IntakeConstants.INTAKE_ARM_STOWED));
 
-        // ── PathPlanner autos ─────────────────────────────────────────────────
-        autoChooser.addOption("Shoot Close Left Then Backup",  new PathPlannerAuto("ShootCloseLeftThenBackup"));
-        autoChooser.addOption("Shoot Close Mid Then Backup",   new PathPlannerAuto("ShootCloseMidThenBackup"));
-        autoChooser.addOption("Shoot Close Right Then Backup", new PathPlannerAuto("ShootCloseRightThenBackup"));
-
+       
         // Put the autoChooser on the SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
         SmartDashboard.putData(field);
@@ -169,54 +176,12 @@ public class RobotContainer
         Command driveFieldOrientedDirectAngle = drivebase.driveFieldOriented(driveDirectAngle);
         Command driveFieldOrientedAnglularVelocity = drivebase.driveFieldOriented(driveAngularVelocity);
         Command driveRobotOrientedAngularVelocity = drivebase.driveFieldOriented(driveRobotOriented);
-        //Command driveSetpointGen = drivebase.driveWithSetpointGeneratorFieldRelative(
-        //        driveDirectAngle);
         Command driveFieldOrientedDirectAngleKeyboard = drivebase.driveFieldOriented(driveDirectAngleKeyboard);
         Command driveFieldOrientedAnglularVelocityKeyboard = drivebase.driveFieldOriented(driveAngularVelocityKeyboard);
-        //Command driveSetpointGenKeyboard = drivebase.driveWithSetpointGeneratorFieldRelative(
-        //        driveDirectAngleKeyboard);
-
-        //shooter.setDefaultCommand(shooter.shooterOffCmd());
-        //intake.setDefaultCommand(intake.intakeOffCommand());
 
 
-        //if (RobotBase.isSimulation())
-        //{
-        //    drivebase.setDefaultCommand(driveFieldOrientedDirectAngleKeyboard);
-        //} else
-        //{
-            //drivebase.setDefaultCommand(driveRobotOrientedAngularVelocity);
-            drivebase.setDefaultCommand(driveFieldOrientedAnglularVelocity);
-        //}
-
-        if (Robot.isSimulation())
-        {
-                /*
-            Pose2d target = new Pose2d(new Translation2d(1, 4),
-                    Rotation2d.fromDegrees(90));
-            // drivebase.getSwerveDrive().field.getObject("targetPose").setPose(target);
-            driveDirectAngleKeyboard.driveToPose(() -> target,
-                    new ProfiledPIDController(5,
-                            0,
-                            0,
-                            new Constraints(5, 2)),
-                    new ProfiledPIDController(5,
-                            0,
-                            0,
-                            new Constraints(Units.degreesToRadians(360),
-                                    Units.degreesToRadians(180))));
-            driverXbox.start()
-                    .onTrue(Commands.runOnce(() -> drivebase.resetOdometry(new Pose2d(3, 3, new Rotation2d()))));
-            driverXbox.button(2).whileTrue(Commands.runEnd(() -> driveDirectAngleKeyboard.driveToPoseEnabled(true),
-                    () -> driveDirectAngleKeyboard.driveToPoseEnabled(false)));
-
-            // driverXbox.b().whileTrue(
-            // drivebase.driveToPose(
-            // new Pose2d(new Translation2d(4, 4), Rotation2d.fromDegrees(0)))
-            // );
-            */
-
-        }
+        drivebase.setDefaultCommand(driveFieldOrientedAnglularVelocity);
+        
         if (DriverStation.isTest())
         {
             //drivebase.setDefaultCommand(driveFieldOrientedAnglularVelocity); // Overrides drive command above!
@@ -232,8 +197,6 @@ public class RobotContainer
             driverXbox.start().onTrue((Commands.runOnce(drivebase::zeroGyroWithAlliance)));
             // Reset the intake encoder zero offset to the current position when the back button is pressed, allowing it to be rezeroed if it drifts over time. Does not require redeploying code.
             driverXbox.back().onTrue(intake.rezeroArmCmd());
-            driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
-            driverXbox.rightBumper().onTrue(Commands.none());
 
             // Driver tests arm speed manually for now with triggers
             driverXbox.leftTrigger(0.1)
@@ -297,7 +260,7 @@ public class RobotContainer
 
             // Left bumper will reverse the intake rollers in case of a jam
             operatorXbox.leftBumper()
-                .whileTrue(intake.setRollerPctOutputCmd(()-> -Constants.IntakeConstants.INTAKE_ROLLER_OUT_SPEED))
+                .whileTrue(intake.setRollerPctOutputCmd(()->Constants.IntakeConstants.INTAKE_ROLLER_OUT_SPEED))
                 .onFalse(intake.rollerOffCmd());
 
             // Right stick X controls turret
